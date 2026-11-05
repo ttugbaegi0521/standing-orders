@@ -110,7 +110,7 @@ list price from last week). Fixture-test steps 2 and 3 so the refusal is determi
 - `npm run dev` / `npm run build`
 - `npm test` — vitest; fixture tests for steps 1–4 and the fill/refusal cycle (no network)
 - `npm run typecheck` — `next typegen` then `tsc` (route types like `RouteContext` are generated)
-- `npm run db:migrate` / `npm run db:seed` — need `DATABASE_URL` (env or `.env.local`); seed is idempotent
+- `npm run db:migrate` / `npm run db:seed` — need `DATABASE_URL` (env, `.env`, or `.env.local`, which overrides `.env`); seed is idempotent
 
 ## Conventions
 
