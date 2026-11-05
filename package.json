@@ -13,6 +13,8 @@
     "db:seed": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/seed.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "4.0.97",
+    "ai": "7.0.163",
     "next": "16.4.5",
     "pg": "^8.23.1",
     "react": "19.3.0",

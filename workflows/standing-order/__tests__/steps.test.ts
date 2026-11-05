@@ -28,12 +28,12 @@ describe("step 1: parseIntent", () => {
   });
 
   it("rejects malformed model output", async () => {
-    await expect(
-      parseIntent(
-        { rawIntent: "x", today: "2026-11-05" },
-        { model: constModel({ ...FILL_ORDER.spec, maxPriceCents: -1 }) },
-      ),
-    ).rejects.toThrow();
+    // Assertion updated for new typed-error contract: parseIntent returns { ok: false } instead of throwing.
+    const result = await parseIntent(
+      { rawIntent: "x", today: "2026-11-05" },
+      { model: constModel({ ...FILL_ORDER.spec, maxPriceCents: -1 }) },
+    );
+    expect(result).toMatchObject({ ok: false, error: { kind: "invalid_output" } });
   });
 });
 
