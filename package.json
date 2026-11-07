@@ -14,7 +14,8 @@
     "paypal:smoke": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/paypal-smoke.ts",
     "vault:smoke": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/vault-smoke.ts",
     "workflow:smoke": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/workflow-smoke.ts",
-    "channel3:smoke": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/channel3-smoke.ts"
+    "channel3:smoke": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/channel3-smoke.ts",
+    "tick": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/tick.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.97",

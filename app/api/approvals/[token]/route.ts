@@ -32,6 +32,24 @@ export async function POST(_req: Request, ctx: RouteContext<"/api/approvals/[tok
   }
   if (!approval.paypal_order_id) return Response.json({ error: "Approval has no PayPal order" }, { status: 409 });
 
+  // A cancelled order must not be bought, even through a link that was already sent. The PayPal order is
+  // left uncaptured (it simply lapses).
+  const parent = await db.query<{ status: string }>(
+    `SELECT o.status FROM decisions d JOIN standing_orders o ON o.id = d.order_id WHERE d.id = $1`,
+    [approval.decision_id],
+  );
+  if (parent.rows[0]?.status === "cancelled") {
+    await db.query(
+      "UPDATE approvals SET resolution = 'rejected', resolved_at = now() WHERE id = $1 AND resolved_at IS NULL",
+      [approval.id],
+    );
+    await db.query(
+      "UPDATE fills SET status = 'failed', error = 'order was cancelled', updated_at = now() WHERE decision_id = $1 AND status = 'pending'",
+      [approval.decision_id],
+    );
+    return Response.json({ error: "This order was cancelled; nothing was captured" }, { status: 409 });
+  }
+
   try {
     const captured = await captureOrder(approval.paypal_order_id);
     const status =

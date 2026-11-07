@@ -10,6 +10,7 @@
 // Only `active` orders may be picked up by a cycle run. Paused, cancelled, filled and needs_review orders
 // must be excluded by whatever drives cycles (the tick loop, when it exists): use RUNNABLE_STATUSES.
 import { getPool } from "@/lib/db";
+import type { Queryable } from "@/lib/price-history";
 import { parseIntent } from "@/workflows/standing-order/steps/parse-intent";
 import type { CreateOrderBody, Spec } from "@/lib/schemas";
 
@@ -293,4 +294,51 @@ export async function createOrder(
     return { id, status: "needs_review", spec: null, warning: `Intent was parsed but could not be saved: ${message}` };
   }
   return { id, status: "active", spec: parsed.output };
+}
+
+// ---- Watch loop ----
+
+/** What a cycle needs to know about an order. */
+export interface DueOrder {
+  id: string;
+  user_id: string;
+  spec: unknown;
+  max_price_cents: number | null;
+  per_order_cap_cents: number;
+  monthly_cap_cents: number;
+  merchant_allowlist: string[];
+  status: OrderStatus;
+}
+
+/**
+ * Picks the orders a tick should run and claims them in the same statement: only RUNNABLE_STATUSES
+ * (paused, cancelled, filled and needs_review never match) that are due (next_check_at null or past), oldest
+ * first. Claiming pushes next_check_at out by `leaseMinutes`, and SKIP LOCKED keeps two overlapping ticks from
+ * taking the same order; the cycle then sets the real next_check_at, and a crashed run is retried after the lease.
+ */
+export async function claimDueOrders(
+  db: Queryable,
+  now: Date,
+  limit: number,
+  leaseMinutes: number,
+): Promise<DueOrder[]> {
+  const leaseUntil = new Date(now.getTime() + leaseMinutes * 60_000);
+  const { rows } = await db.query<DueOrder>(
+    `WITH due AS (
+       SELECT id FROM standing_orders
+        WHERE status = ANY($1::text[])
+          AND (next_check_at IS NULL OR next_check_at <= $2::timestamptz)
+        ORDER BY COALESCE(next_check_at, created_at)
+        LIMIT $3
+        FOR UPDATE SKIP LOCKED
+     )
+     UPDATE standing_orders o
+        SET next_check_at = $4::timestamptz
+       FROM due
+      WHERE o.id = due.id
+  RETURNING o.id, o.user_id, o.spec, o.max_price_cents, o.per_order_cap_cents, o.monthly_cap_cents,
+            o.merchant_allowlist, o.status`,
+    [[...RUNNABLE_STATUSES], now.toISOString(), limit, leaseUntil.toISOString()],
+  );
+  return rows;
 }

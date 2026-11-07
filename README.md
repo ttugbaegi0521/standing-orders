@@ -68,6 +68,21 @@ curl -X POST http://localhost:3000/api/orders/<id>/cancel
 
 Statuses: `active`, `needs_review`, `paused`, `filled`, `cancelled`. Only `active` orders may be advanced by a cycle run (`RUNNABLE_STATUSES` in `lib/orders.ts`), so paused, cancelled, filled and needs-review orders are skipped by the future tick loop. A captured tier-2 approval sets the order to `filled`. Nothing runs cycles on a schedule yet; `npm run workflow:smoke` is still the only driver.
 
+## The watch loop (`POST /api/tick`, `npm run tick`)
+
+This is what makes an order "standing". Each tick claims every `active` order that is due (`next_check_at` null or past; paused, cancelled, filled and needs-review orders are never selected), and for each one runs a full persisted cycle: live Channel3 search, live Claude scoring, price history, live Claude decide, guardrails, then execute with the real PayPal sandbox. A hold, skip or error schedules the next check `HOLD_RECHECK_MINUTES` later (default 60); a pending approval waits for its expiry and is not duplicated; a captured fill marks the order `filled`. One order failing does not stop the batch, and its error is in the response.
+
+```sh
+npm run tick                                    # one tick, pretty-printed
+curl -X POST http://localhost:3000/api/tick     # the same, as JSON: { checked, results }
+```
+
+Run one of these on a schedule (for example a Render cron job); nothing schedules itself. Unlike `workflow:smoke`, the loop is always live and needs `ANTHROPIC_API_KEY` and `CHANNEL3_API_KEY` (the endpoint answers 503 without them instead of using fixtures), plus PayPal credentials. Set `TICK_SECRET` to require `Authorization: Bearer <secret>`; without it anyone who can reach the endpoint can trigger live calls.
+
+Every tick also records the price Channel3 returns for each product it saw into `price_points` (skipping a product whose price is unchanged within the last hour), so history builds up for real products. Fake-sale detection reads that history, but it needs more than a few ticks: it compares a recent price peak (the last 14 days) with a baseline of at least 3 observations older than 14 days, so a live product needs roughly two weeks of history before it can be flagged. Until then the decide step sees no baseline and judges on the price alone.
+
+Cancelling an order also blocks its outstanding approval links: capturing one answers 409 and rejects the approval.
+
 ## Tests
 
 ```sh
