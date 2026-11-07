@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { getPool } from "@/lib/db";
-import { dollars, formatWhen } from "../../_components/format";
+import { LocalTime } from "../../_components/LocalTime";
+import { dollars } from "../../_components/format";
 import { FinalizeApproval } from "../../_components/finalize-approval";
 import { Mono, Notice, OrderStatusPill, Shell, buttonPrimary, buttonQuiet } from "../../_components/ui";
 
@@ -128,7 +129,7 @@ async function ApprovalBody({
       <>
         <h1 className="font-serif text-3xl tracking-tight">You did not approve this purchase</h1>
         <p className="mt-4 max-w-prose text-[#6b6a64]">
-          Nothing was charged. The approval stays open until <Mono>{formatWhen(view.expires_at)}</Mono>; you can
+          Nothing was charged. The approval stays open until <LocalTime iso={view.expires_at.toISOString()} mode="both" className="font-mono" />; you can
           still approve it from the order.
         </p>
       </>

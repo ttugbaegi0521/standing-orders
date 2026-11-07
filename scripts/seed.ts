@@ -1,8 +1,11 @@
-// Seeds the demo user, both demo standing orders, and their price history (relative to now).
-// Idempotent: re-running resets the demo rows and seed price points.
+// Seeds the demo user, both demo standing orders, and their price history (relative to now). The headphones order
+// also gets its current candidate, so the order page can chart the fake-sale spike straight away; the refusal itself
+// is not seeded: run `npm run demo-run` to produce it by running the decide step.
+// Idempotent: re-running resets the demo rows (including price points for the demo products, whatever their source).
 // Usage: DATABASE_URL=postgres://... npm run db:seed
 import { Client } from "pg";
-import { DEMO_USER, FIXTURE_ORDERS } from "@/fixtures/demo";
+import { DEMO_USER, FAKE_SALE_ORDER, FIXTURE_ORDERS } from "@/fixtures/demo";
+import { analyzePriceHistory } from "@/workflows/standing-order/price-signals";
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -44,8 +47,10 @@ async function main() {
       await client.query("DELETE FROM decisions WHERE order_id = $1", [order.id]);
       await client.query("DELETE FROM candidates WHERE order_id = $1", [order.id]);
 
-      for (const [productId, points] of Object.entries(order.priceHistory(now))) {
-        await client.query("DELETE FROM price_points WHERE product_id = $1 AND source = 'seed'", [productId]);
+      const history = (order.seedHistory ?? order.priceHistory)(now);
+      for (const [productId, points] of Object.entries(history)) {
+        // Every source: a demo run records its own observations, and a reseed should start clean.
+        await client.query("DELETE FROM price_points WHERE product_id = $1", [productId]);
         await client.query(
           `INSERT INTO price_points (product_id, price_cents, observed_at, source)
            SELECT $1, unnest($2::int[]), unnest($3::timestamptz[]), 'seed'`,
@@ -53,6 +58,33 @@ async function main() {
         );
       }
     }
+    // The headphones demo only works if this history really reads as a fake sale: check it against the real
+    // thresholds (price-signals.ts) instead of trusting the numbers, and seed the candidate it belongs to.
+    const product = FAKE_SALE_ORDER.products[0];
+    const score = FAKE_SALE_ORDER.scores.find((s) => s.productId === product.productId)!;
+    const seeded = FAKE_SALE_ORDER.seedHistory!(now)[product.productId];
+    const signals = analyzePriceHistory(seeded, product.priceCents, now);
+    if (!signals.fakeSale.detected) {
+      throw new Error(`the seeded headphones history does not read as a fake sale: ${JSON.stringify(signals)}`);
+    }
+    await client.query(
+      `INSERT INTO candidates
+         (order_id, channel3_product_id, merchant, title, url, price_cents, fit_score, fit_reasoning, must_haves, seen_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        FAKE_SALE_ORDER.id,
+        product.productId,
+        product.merchant,
+        product.title,
+        product.url,
+        product.priceCents,
+        score.fitScore,
+        score.reasoning,
+        JSON.stringify(score.mustHaves),
+        now,
+      ],
+    );
+
     await client.query("COMMIT");
     console.log(`seeded ${FIXTURE_ORDERS.length} orders for ${DEMO_USER.email}`);
   } catch (err) {

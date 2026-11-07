@@ -68,6 +68,15 @@ curl -X POST http://localhost:3000/api/orders/<id>/cancel
 
 Statuses: `active`, `needs_review`, `paused`, `filled`, `cancelled`. Only `active` orders may be advanced by a cycle run (`RUNNABLE_STATUSES` in `lib/orders.ts`), so paused, cancelled, filled and needs-review orders are skipped by the future tick loop. A captured tier-2 approval sets the order to `filled`. Nothing runs cycles on a schedule yet; `npm run workflow:smoke` is still the only driver.
 
+## Demo: the refusal in the browser, from seed data alone
+
+```sh
+npm run db:migrate && npm run db:seed
+npm run demo-run
+```
+
+`db:seed` writes the headphones order with nine price observations over 25 days (about $229 for weeks, a jump to $349 eight days ago, now "on sale" at $239) and its current candidate; it checks that history against the real fake-sale thresholds and refuses to seed if it would not trigger. Reseeding resets the demo orders' decisions, fills and price points. `demo-run` then runs one real persisted cycle over that candidate and history, so the skip decision is produced by the decide step, not inserted: live Claude when `ANTHROPIC_API_KEY` is set (`USE_LIVE_MODEL=false` forces the fixture model), otherwise the fixture model. Search and scoring use the fixtures and PayPal is stubbed to refuse, so it never calls Channel3 and can never buy anything. Open `/orders` and the headphones order to see the chart with the spike and the "fake sale" reasoning. If you run `demo-run` right after seeding, the current price is not recorded a second time (an identical price within the last hour is skipped).
+
 ## The watch loop (`POST /api/tick`, `npm run tick`)
 
 This is what makes an order "standing". Each tick claims every `active` order that is due (`next_check_at` null or past; paused, cancelled, filled and needs-review orders are never selected), and for each one runs a full persisted cycle: live Channel3 search, live Claude scoring, price history, live Claude decide, guardrails, then execute with the real PayPal sandbox. A hold, skip or error schedules the next check `HOLD_RECHECK_MINUTES` later (default 60); a pending approval waits for its expiry and is not duplicated; a captured fill marks the order `filled`. One order failing does not stop the batch, and its error is in the response.

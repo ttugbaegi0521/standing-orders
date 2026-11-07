@@ -20,6 +20,11 @@ export interface FixtureOrder {
   scores: CandidateScore[];
   /** Price history per product, relative to `now`. */
   priceHistory: (now: string) => Record<string, PricePoint[]>;
+  /**
+   * What scripts/seed.ts writes to the database, when it should differ from `priceHistory`: a sparse,
+   * realistic series like the live loop would record (tests keep using the denser `priceHistory`).
+   */
+  seedHistory?: (now: string) => Record<string, PricePoint[]>;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -178,6 +183,27 @@ export const FAKE_SALE_ORDER: FixtureOrder = {
   priceHistory: (now) => ({
     "ch3-hp-quietwave9": [...daily(now, 45, 9, 22900), ...daily(now, 8, 1, 34900)],
   }),
+  // Nine observations over 25 days, as the live loop would collect them: about $229 for weeks (four baseline
+  // points older than 14 days), a jump to $349 eight days ago, and today's "on sale" $239 (the fixture price).
+  seedHistory: (now) => {
+    const at = (daysAgo: number, priceCents: number): PricePoint => ({
+      priceCents,
+      observedAt: new Date(Date.parse(now) - daysAgo * DAY_MS).toISOString(),
+    });
+    return {
+      "ch3-hp-quietwave9": [
+        at(25, 22900),
+        at(21, 22900),
+        at(18, 23100),
+        at(15, 22900),
+        at(11, 22900),
+        at(8, 34900),
+        at(5, 34900),
+        at(2, 34900),
+        at(0, 23900),
+      ],
+    };
+  },
 };
 
 export const FIXTURE_ORDERS = [FILL_ORDER, FAKE_SALE_ORDER];
