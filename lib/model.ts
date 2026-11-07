@@ -22,3 +22,8 @@ export function createClaudeModel(): LanguageModel {
 export function getDecideModel(): LanguageModel {
   return createClaudeModel();
 }
+
+/** Model for the search-and-score step (step 2). Same model id as every other step. */
+export function getScoreModel(): LanguageModel {
+  return createClaudeModel();
+}

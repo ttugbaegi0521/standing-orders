@@ -2,7 +2,7 @@
 // the monitor produces an approval link (you approve as the sandbox buyer, press Enter, we capture),
 // the headphones are skipped as a fake sale with no PayPal call at all.
 //
-// Fixture score model. The decide step uses the fixture model unless USE_LIVE_MODEL=true (real Claude, needs
+// The scoring and decide steps use fixture models unless USE_LIVE_MODEL=true (real Claude for both, needs
 // ANTHROPIC_API_KEY); search uses the fixture Channel3 unless USE_LIVE_CHANNEL3=true (needs CHANNEL3_API_KEY).
 // Live failures are reported, never replaced by the fixture. No Vault. Needs DATABASE_URL (migrated + seeded),
 // PAYPAL_CLIENT_ID/SECRET and DEMO_USER_ID. AGENT_READY_MERCHANTS must be empty/unset so everything is tier 2.
@@ -15,7 +15,7 @@ import { createChannel3Client } from "@/lib/channel3";
 import { fixtureChannel3, fixtureScoreModel, rulesDecideModel } from "@/fixtures/fakes";
 import { getPool } from "@/lib/db";
 import { recordLlmCall, type LlmCallLog } from "@/lib/llm-log";
-import { getDecideModel } from "@/lib/model";
+import { getDecideModel, getScoreModel } from "@/lib/model";
 import { consoleNotifier, type Notifier } from "@/lib/notify";
 import { createPayPalClient } from "@/lib/paypal";
 import { OrderPolicySchema, SpecSchema, type PricePoint } from "@/lib/schemas";
@@ -78,17 +78,36 @@ async function runOrder(row: OrderRow, fixture: FixtureOrder, notifier: Notifier
     [row.user_id],
   );
 
-  const search = await searchAndScore(
-    { spec },
-    {
-      channel3: USE_LIVE_CHANNEL3 ? createChannel3Client() : fixtureChannel3(fixture.products),
-      model: fixtureScoreModel(fixture.scores),
-    },
-  );
-  if (USE_LIVE_CHANNEL3) {
+  const decisionId = randomUUID();
+  // llm_calls.decision_id references decisions(id), which execute writes later, so live-model audit rows are
+  // held until then. If a live step fails, execute never runs and the rows are logged without a decision id.
+  const pendingLlmLogs: LlmCallLog[] = [];
+  const deferLog = async (call: LlmCallLog) => void pendingLlmLogs.push(call);
+  const flushWithoutDecision = async () => {
+    for (const call of pendingLlmLogs) await recordLlmCall({ ...call, decision_id: null });
+  };
+
+  const channel3 = USE_LIVE_CHANNEL3 ? createChannel3Client() : fixtureChannel3(fixture.products);
+  let search;
+  if (USE_LIVE_MODEL) {
+    const live = await searchAndScore(
+      { spec },
+      { channel3, model: getScoreModel(), recordLlmCall: deferLog },
+      { orderId: row.id, decisionId },
+    );
+    if (!live.ok) {
+      await flushWithoutDecision();
+      throw new Error(`search-and-score (live model) failed: ${live.error.kind}: ${live.error.message}`);
+    }
+    search = live;
+  } else {
+    search = await searchAndScore({ spec }, { channel3, model: fixtureScoreModel(fixture.scores) });
+  }
+  if (USE_LIVE_CHANNEL3 || USE_LIVE_MODEL) {
     const o = search.output;
     console.log(
-      `Channel3 (live): ${o.searched} products searched, ${o.scored.length} scored by the fixture model, ${o.candidates.length} candidate(s)`,
+      `Search (channel3: ${USE_LIVE_CHANNEL3 ? "live" : "fake"}, scoring: ${USE_LIVE_MODEL ? "live claude" : "fake"}): ` +
+        `${o.searched} products searched, ${o.scored.length} scored, ${o.candidates.length} candidate(s)`,
     );
   }
   const candidate = search.output.candidates[0] ?? null;
@@ -102,20 +121,16 @@ async function runOrder(row: OrderRow, fixture: FixtureOrder, notifier: Notifier
     priceHistory = rows.map((r) => ({ priceCents: r.price_cents, observedAt: r.observed_at.toISOString() }));
   }
 
-  const decisionId = randomUUID();
   const decideInput = { spec, candidate, priceHistory, now, saleEvents: SALE_EVENTS, policy };
-  // The llm_calls row references decisions(id), which execute writes later, so hold live-model audit rows
-  // until then. If decide fails, execute never runs and the row is logged without a decision id.
-  const pendingLlmLogs: LlmCallLog[] = [];
   let decided;
   if (USE_LIVE_MODEL) {
     const live = await decide(
       decideInput,
-      { model: getDecideModel(), recordLlmCall: async (call) => void pendingLlmLogs.push(call) },
+      { model: getDecideModel(), recordLlmCall: deferLog },
       { orderId: row.id, decisionId },
     );
     if (!live.ok) {
-      for (const call of pendingLlmLogs) await recordLlmCall({ ...call, decision_id: null });
+      await flushWithoutDecision();
       throw new Error(`decide (live model) failed: ${live.error.kind}: ${live.error.message}`);
     }
     decided = live;
@@ -256,11 +271,15 @@ async function driveRefusal(row: OrderRow, fixture: FixtureOrder): Promise<{ rea
 }
 
 async function main() {
-  console.log(`decide model: ${USE_LIVE_MODEL ? "live claude" : "fake"} | channel3: ${USE_LIVE_CHANNEL3 ? "live" : "fake"}`);
+  const modelMode = USE_LIVE_MODEL ? "live claude" : "fake";
+  console.log(`decide model: ${modelMode} | score model: ${modelMode} | channel3: ${USE_LIVE_CHANNEL3 ? "live" : "fake"}`);
   if (USE_LIVE_CHANNEL3) {
     console.log(
-      "note: the fixture score model and seeded price_points only know the seeded product ids, so live Channel3 " +
-        "products usually yield no candidate; the orders will not fill or refuse in this mode.",
+      USE_LIVE_MODEL
+        ? "note: live Channel3 products have no price history (only the seeded product ids do), so the fake-sale " +
+          "refusal cannot trigger for them, and a must-have the product data cannot show (such as free returns) fails."
+        : "note: the fixture score model and seeded price_points only know the seeded product ids, so live " +
+          "Channel3 products usually yield no candidate; set USE_LIVE_MODEL=true to score them with Claude.",
     );
   }
   const userId = process.env.DEMO_USER_ID;
