@@ -2,14 +2,16 @@
 // the monitor produces an approval link (you approve as the sandbox buyer, press Enter, we capture),
 // the headphones are skipped as a fake sale with no PayPal call at all.
 //
-// Fixture score model; the decide step uses the fixture model unless USE_LIVE_MODEL=true (then real Claude,
-// needs ANTHROPIC_API_KEY). No Vault. Needs DATABASE_URL (migrated + seeded),
+// Fixture score model. The decide step uses the fixture model unless USE_LIVE_MODEL=true (real Claude, needs
+// ANTHROPIC_API_KEY); search uses the fixture Channel3 unless USE_LIVE_CHANNEL3=true (needs CHANNEL3_API_KEY).
+// Live failures are reported, never replaced by the fixture. No Vault. Needs DATABASE_URL (migrated + seeded),
 // PAYPAL_CLIENT_ID/SECRET and DEMO_USER_ID. AGENT_READY_MERCHANTS must be empty/unset so everything is tier 2.
 // Usage: npm run workflow:smoke
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { POST as captureApproval } from "@/app/api/approvals/[token]/route";
 import { FIXTURE_ORDERS, type FixtureOrder } from "@/fixtures/demo";
+import { createChannel3Client } from "@/lib/channel3";
 import { fixtureChannel3, fixtureScoreModel, rulesDecideModel } from "@/fixtures/fakes";
 import { getPool } from "@/lib/db";
 import { recordLlmCall, type LlmCallLog } from "@/lib/llm-log";
@@ -28,6 +30,7 @@ import { applyGuardrails } from "@/workflows/standing-order/steps/guardrails";
 import { searchAndScore } from "@/workflows/standing-order/steps/search-and-score";
 
 const USE_LIVE_MODEL = process.env.USE_LIVE_MODEL === "true";
+const USE_LIVE_CHANNEL3 = process.env.USE_LIVE_CHANNEL3 === "true";
 const POLL_MS = 3_000;
 const POLL_TIMEOUT_MS = 60_000;
 
@@ -77,8 +80,17 @@ async function runOrder(row: OrderRow, fixture: FixtureOrder, notifier: Notifier
 
   const search = await searchAndScore(
     { spec },
-    { channel3: fixtureChannel3(fixture.products), model: fixtureScoreModel(fixture.scores) },
+    {
+      channel3: USE_LIVE_CHANNEL3 ? createChannel3Client() : fixtureChannel3(fixture.products),
+      model: fixtureScoreModel(fixture.scores),
+    },
   );
+  if (USE_LIVE_CHANNEL3) {
+    const o = search.output;
+    console.log(
+      `Channel3 (live): ${o.searched} products searched, ${o.scored.length} scored by the fixture model, ${o.candidates.length} candidate(s)`,
+    );
+  }
   const candidate = search.output.candidates[0] ?? null;
 
   let priceHistory: PricePoint[] = [];
@@ -244,7 +256,13 @@ async function driveRefusal(row: OrderRow, fixture: FixtureOrder): Promise<{ rea
 }
 
 async function main() {
-  console.log(`decide model: ${USE_LIVE_MODEL ? "live claude" : "fake"}`);
+  console.log(`decide model: ${USE_LIVE_MODEL ? "live claude" : "fake"} | channel3: ${USE_LIVE_CHANNEL3 ? "live" : "fake"}`);
+  if (USE_LIVE_CHANNEL3) {
+    console.log(
+      "note: the fixture score model and seeded price_points only know the seeded product ids, so live Channel3 " +
+        "products usually yield no candidate; the orders will not fill or refuse in this mode.",
+    );
+  }
   const userId = process.env.DEMO_USER_ID;
   if (!userId) throw new Error("DEMO_USER_ID is not set");
   if ((process.env.AGENT_READY_MERCHANTS ?? "").trim()) {

@@ -52,6 +52,8 @@ The script drives both seeded orders through the real steps against Postgres and
 
 By default the decide step uses the fixture model, so tests and CI need no API key. `USE_LIVE_MODEL=true npm run workflow:smoke` runs the decide step against the live Claude model instead (needs `ANTHROPIC_API_KEY`); the run prints `decide model: live claude` or `decide model: fake` first, and each live call is recorded in `llm_calls`.
 
+`USE_LIVE_CHANNEL3=true` makes the search step call the real Channel3 API (needs `CHANNEL3_API_KEY`), independently of `USE_LIVE_MODEL`; `USE_LIVE_CHANNEL3=true USE_LIVE_MODEL=true npm run workflow:smoke` runs search and the decide step live. Live failures are reported, never replaced by the fixtures. Two limits to expect, not bugs: Channel3 returns no price history, so the fake-sale refusal still depends on the seeded `price_points` (keyed to the seeded product ids), and the step 2 scorer is still a fixture that only knows those ids, so live products normally produce no candidate and the seeded orders will not fill or refuse in live-search mode. `npm run channel3:smoke` is a one-call connectivity check that prints five live results.
+
 ## Tests
 
 ```sh
