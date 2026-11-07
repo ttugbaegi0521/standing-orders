@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { demoUserId, getOrderStore, type OrderSummary } from "@/lib/orders";
+import { getPool } from "@/lib/db";
+import { demoUserId, getKillSwitch, getOrderStore, type OrderSummary } from "@/lib/orders";
+import { KillSwitch } from "../_components/KillSwitch";
 import { LocalTime } from "../_components/LocalTime";
 import { dollars } from "../_components/format";
 import { ActionPill, Mono, Notice, OrderStatusPill, Shell, buttonPrimary } from "../_components/ui";
@@ -42,15 +44,50 @@ function counts(orders: OrderSummary[]): string {
     .join(" · ");
 }
 
-// The heading and button are static; the list is read from the database per request.
+/** null when it can't be read (no user, or the database is down); the orders list reports that problem itself. */
+async function killSwitchState(): Promise<boolean | null> {
+  const userId = demoUserId();
+  if (!userId) return null;
+  try {
+    return await getKillSwitch(getPool(), userId);
+  } catch {
+    return null;
+  }
+}
+
+async function KillSwitchBanner() {
+  await connection();
+  if (!(await killSwitchState())) return null;
+  return (
+    <div role="alert" className="mb-8 rounded-lg bg-red-800 px-5 py-4 text-base font-medium text-white">
+      Agent paused — kill switch on. No purchases will be made.
+    </div>
+  );
+}
+
+async function KillSwitchControl() {
+  await connection();
+  const on = await killSwitchState();
+  return on === null ? null : <KillSwitch on={on} />;
+}
+
+// The heading and buttons are static; the kill switch and the list are read from the database per request.
 export default function OrdersPage() {
   return (
     <Shell width="max-w-4xl">
-      <div className="flex items-end justify-between gap-4">
+      <Suspense fallback={null}>
+        <KillSwitchBanner />
+      </Suspense>
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">Your standing orders</h1>
-        <Link href="/orders/new" className={`${buttonPrimary} shrink-0`}>
-          New standing order
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <Suspense fallback={null}>
+            <KillSwitchControl />
+          </Suspense>
+          <Link href="/orders/new" className={`${buttonPrimary} shrink-0`}>
+            New standing order
+          </Link>
+        </div>
       </div>
       <Suspense fallback={<p className="mt-10 text-[#a3a199]">Loading your orders…</p>}>
         <OrdersList />

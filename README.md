@@ -68,6 +68,12 @@ curl -X POST http://localhost:3000/api/orders/<id>/cancel
 
 Statuses: `active`, `needs_review`, `paused`, `filled`, `cancelled`. Only `active` orders may be advanced by a cycle run (`RUNNABLE_STATUSES` in `lib/orders.ts`), so paused, cancelled, filled and needs-review orders are skipped by the future tick loop. A captured tier-2 approval sets the order to `filled`. Nothing runs cycles on a schedule yet; `npm run workflow:smoke` is still the only driver.
 
+## Kill switch
+
+The toggle in the `/orders` header (or `GET`/`POST /api/kill-switch`; `{ "on": true }` sets it, no body flips it) sets `users.kill_switch`. While it is on a banner says so and the watch loop, both on a tick and on Check now, never buys: if the model proposes a purchase the cycle stops before step 5 and records the decision as `skip` with `guardrail_reasons: ["kill_switch"]` and the reasoning "Agent paused by kill switch — no purchase made", so no fill, approval or PayPal order is created. Orders keep being checked and prices recorded; only buying stops. The order page flags those decisions in the log.
+
+Each check also stores the top five scored products (migration `0007_candidates.sql` adds `candidates.chosen`), and the order page lists them under "Considered N products via Channel3" with the pick marked. Note the label describes the live path: orders created by `db:seed`/`demo-run` show fixture products under the same label.
+
 ## Demo: the refusal in the browser, from seed data alone
 
 ```sh

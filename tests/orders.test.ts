@@ -143,6 +143,7 @@ function fakeStore() {
           updated_at: r.createdAt,
         },
         latest_candidate: null,
+        considered: [],
         decisions: r.decisions,
         open_approvals: [],
         fills: [],

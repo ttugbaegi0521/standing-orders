@@ -11,7 +11,8 @@ import { LocalTime } from "../../_components/LocalTime";
 import { PriceChart } from "../../_components/PriceChart";
 import { dollars } from "../../_components/format";
 import { OrderActions } from "../../_components/order-actions";
-import { ActionPill, Mono, Notice, OrderStatusPill, SectionTitle, Shell, buttonPrimary } from "../../_components/ui";
+import { KILL_SWITCH_REASON } from "@/workflows/standing-order/steps/guardrails";
+import { ActionPill, Mono, Notice, OrderStatusPill, Pill, SectionTitle, Shell, buttonPrimary } from "../../_components/ui";
 
 interface CandidateRow {
   channel3_product_id: string;
@@ -41,6 +42,7 @@ function List({ items, empty }: { items: string[]; empty: string }) {
 
 /** "Kill switch is on: ..." reads better mid-sentence as "kill switch is on: ...". */
 function inSentence(reason: string): string {
+  if (reason === KILL_SWITCH_REASON) return "the kill switch is on";
   const r = reason.replace(/[.\s]+$/, "");
   return /^[A-Z][a-z]/.test(r) ? r[0].toLowerCase() + r.slice(1) : r;
 }
@@ -48,6 +50,7 @@ function inSentence(reason: string): string {
 function Decision({ d }: { d: OrderDetail["decisions"][number] }) {
   const changed = d.model_action !== d.action;
   const because = d.guardrail_reasons.filter(Boolean).map(inSentence).join("; ");
+  const killSwitch = d.guardrail_reasons.includes(KILL_SWITCH_REASON);
   return (
     <li className="border-t border-[#e7e5df] py-4 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -61,6 +64,11 @@ function Decision({ d }: { d: OrderDetail["decisions"][number] }) {
         </p>
       ) : (
         because && <p className="mt-2 text-sm text-[#6b6a64]">Guardrail note: {because}.</p>
+      )}
+      {killSwitch && (
+        <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-900">
+          Blocked by the kill switch. No purchase was made.
+        </p>
       )}
       <p className="mt-2 max-w-prose text-[0.95rem] leading-relaxed">{d.reasoning}</p>
     </li>
@@ -242,6 +250,7 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
         <SectionTitle>Current candidate</SectionTitle>
         {candidate ? (
           <div>
+            <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[#a3a199]">via Channel3</p>
             <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
               <h3 className="font-serif text-xl leading-snug">
                 {candidate.url ? (
@@ -273,6 +282,41 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
           <p className="text-[#6b6a64]">No candidate yet. One appears after the first check.</p>
         )}
       </section>
+
+      {detail.considered.length > 1 && (
+        <section className="mb-14">
+          <SectionTitle>Considered {detail.considered.length} products via Channel3</SectionTitle>
+          <p className="-mt-2 mb-4 text-sm text-[#6b6a64]">The top {detail.considered.length} by fit score from the latest check.</p>
+          <ul>
+            {detail.considered.map((c) => (
+              <li
+                key={c.channel3_product_id}
+                className="grid grid-cols-[1fr_auto] items-baseline gap-x-6 gap-y-1 border-t border-[#e7e5df] py-3 text-sm sm:grid-cols-[1fr_auto_5.5rem_5.5rem]"
+              >
+                <span className="min-w-0">
+                  <span className={`block truncate text-[0.95rem] ${c.chosen ? "font-medium" : ""}`}>
+                    {c.url ? (
+                      <a href={c.url} className="hover:underline">
+                        {c.title}
+                      </a>
+                    ) : (
+                      c.title
+                    )}
+                  </span>
+                  <span className="text-[#6b6a64]">{c.merchant}</span>
+                </span>
+                <span className="justify-self-end sm:order-last">{c.chosen && <Pill tone="blue">Chosen</Pill>}</span>
+                <span className="text-right sm:text-left">
+                  <Mono>{dollars(c.price_cents)}</Mono>
+                </span>
+                <span className="text-[#6b6a64]">
+                  fit <Mono>{c.fit_score}</Mono>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="mb-14">
         <SectionTitle>Price history</SectionTitle>

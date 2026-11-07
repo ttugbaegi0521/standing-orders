@@ -6,6 +6,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { LanguageModel } from "ai";
 import { createChannel3Client, type Channel3Client } from "@/lib/channel3";
 import { recordLlmCall, type LlmCallLog } from "@/lib/llm-log";
+import { formatUsd } from "@/lib/money";
 import { getDecideModel, getScoreModel } from "@/lib/model";
 import { claimDueOrders, type DueOrder } from "@/lib/orders";
 import { consoleNotifier, type Notifier } from "@/lib/notify";
@@ -27,7 +28,7 @@ import {
   type ExecuteOutput,
   type ExecutePersistence,
 } from "./steps/execute";
-import { applyGuardrails } from "./steps/guardrails";
+import { applyGuardrails, KILL_SWITCH_REASON, KILL_SWITCH_REASONING } from "./steps/guardrails";
 import { searchAndScore, type ScoreModelInput } from "./steps/search-and-score";
 import type { Model } from "./types";
 
@@ -48,6 +49,9 @@ export interface RunOrderDeps {
   newApprovalToken?: () => string;
   appBaseUrl?: string;
 }
+
+/** How many of a check's top-scored products are stored for the order page. */
+const CONSIDERED_LIMIT = 5;
 
 export type CycleAction = Action | "needs_review" | "awaiting_approval";
 
@@ -179,25 +183,41 @@ async function cycle(order: DueOrder, spec: Spec, deps: RunOrderDeps, now: Date)
   );
 
   const candidate = search.output.candidates[0] ?? null;
-  if (candidate) {
+
+  // Keep the top-scored products from this check, not only the pick, so the order page can show what was
+  // considered. The pick is always kept, even when failed must-haves leave higher scores below it.
+  const considered = [...search.output.scored]
+    .sort((a, b) => b.fitScore - a.fitScore || a.priceCents - b.priceCents)
+    .slice(0, CONSIDERED_LIMIT);
+  if (candidate && !considered.some((c) => c.productId === candidate.productId)) {
+    considered.length = Math.min(considered.length, CONSIDERED_LIMIT - 1);
+    considered.push(candidate);
+  }
+  if (considered.length > 0) {
+    const COLUMNS = 11;
+    const placeholders = considered
+      .map((_, i) => `(${Array.from({ length: COLUMNS }, (_, j) => `$${i * COLUMNS + j + 1}`).join(", ")})`)
+      .join(", ");
     await db
       .query(
         `INSERT INTO candidates
-           (order_id, channel3_product_id, merchant, title, url, price_cents, fit_score, fit_reasoning, must_haves)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [
+           (order_id, channel3_product_id, merchant, title, url, price_cents, fit_score, fit_reasoning, must_haves, seen_at, chosen)
+         VALUES ${placeholders}`,
+        considered.flatMap((c) => [
           order.id,
-          candidate.productId,
-          candidate.merchant,
-          candidate.title,
-          candidate.url,
-          candidate.priceCents,
-          candidate.fitScore,
-          candidate.reasoning,
-          JSON.stringify(candidate.mustHaves),
-        ],
+          c.productId,
+          c.merchant,
+          c.title,
+          c.url,
+          c.priceCents,
+          c.fitScore,
+          c.reasoning,
+          JSON.stringify(c.mustHaves),
+          now.toISOString(),
+          c.productId === candidate?.productId,
+        ]),
       )
-      .catch((err) => console.error("[run-order] could not store candidate:", (err as Error).message));
+      .catch((err) => console.error("[run-order] could not store candidates:", (err as Error).message));
   }
 
   // Step 3: decide, on history that excludes the observation just recorded.
@@ -229,13 +249,46 @@ async function cycle(order: DueOrder, spec: Spec, deps: RunOrderDeps, now: Date)
       [order.user_id, now.toISOString()],
     ),
   ]);
+  const killSwitchOn = user.rows[0]?.kill_switch ?? false;
   const guardrails = applyGuardrails({
     decision: decided.output.decision,
     candidate,
     policy,
-    killSwitch: user.rows[0]?.kill_switch ?? false,
+    killSwitch: killSwitchOn,
     monthToDateSpendCents: Number(spend.rows[0]?.cents ?? 0),
   });
+
+  // Kill switch: a proposed purchase stops here, before execute, so no fill, approval or PayPal order can be
+  // created while it is on. The decision is still recorded (what the model proposed, and why nothing happened).
+  if (killSwitchOn && (guardrails.modelAction === "fill" || guardrails.modelAction === "ask")) {
+    const explanation = candidate
+      ? `The kill switch is on, so I did not buy "${candidate.title}" from ${candidate.merchant} at ${formatUsd(candidate.priceCents)}. Turn it off to let the agent buy again.`
+      : "The kill switch is on, so I did not buy anything. Turn it off to let the agent buy again.";
+    await (deps.persistence ?? createPgExecutePersistence()).recordDecision({
+      id: decisionId,
+      orderId: order.id,
+      modelAction: guardrails.modelAction,
+      action: "skip",
+      reasoning: KILL_SWITCH_REASONING,
+      guardrailReasons: [KILL_SWITCH_REASON],
+      explanation,
+      llmInputHash: decided.llmCall?.inputHash ?? null,
+    });
+    for (const call of pendingLogs) await recordLlmCall(call);
+    await deps.notify.send({ userId: order.user_id, subject: "Standing order: skip", body: explanation });
+    await schedule(db, order.id, now, recheck);
+    return {
+      orderId: order.id,
+      action: "skip",
+      candidate: candidate
+        ? { productId: candidate.productId, title: candidate.title, merchant: candidate.merchant, priceCents: candidate.priceCents }
+        : null,
+      reasoning: KILL_SWITCH_REASONING,
+      nextCheckAt: recheck.toISOString(),
+      execution: "none",
+      decisionId,
+    };
+  }
 
   // Step 5: execute with full persistence (decision, pending fill, approval, real PayPal order).
   const execution = await executeOrNotify(

@@ -14,6 +14,7 @@ import type { DueOrder } from "@/lib/orders";
 import { claimDueOrders } from "@/lib/orders";
 import type { Queryable } from "@/lib/price-history";
 import { HOLD_RECHECK_MINUTES } from "@/workflows/standing-order/config";
+import { KILL_SWITCH_REASONING } from "@/workflows/standing-order/steps/guardrails";
 import { runOrderCycle, tickOnce, type RunOrderDeps } from "@/workflows/standing-order/run-order";
 import type {
   ApprovalRow,
@@ -107,6 +108,7 @@ function fakeDb(mem: ReturnType<typeof memoryPersistence>) {
     orders: [] as OrderRowState[],
     prices: [] as PricePointRow[],
     candidates: [] as unknown[][],
+    killSwitch: false,
     calls: [] as { sql: string; params: unknown[] }[],
   };
   const db: Queryable = {
@@ -176,7 +178,7 @@ function fakeDb(mem: ReturnType<typeof memoryPersistence>) {
         state.candidates.push(params);
         return rows([]);
       }
-      if (/SELECT kill_switch/.test(sql)) return rows([{ kill_switch: false }]);
+      if (/SELECT kill_switch/.test(sql)) return rows([{ kill_switch: state.killSwitch }]);
       if (/COALESCE\(SUM/.test(sql)) return rows([{ cents: "0" }]);
       throw new Error(`fake db: unexpected SQL: ${sql.slice(0, 80)}`);
     },
@@ -367,6 +369,158 @@ describe("runOrderCycle", () => {
 
     await expect(runOrderCycle(order, deps)).rejects.toThrow("channel3 down");
     expect(state.orders[0].next_check_at).toBe(iso(HOLD_RECHECK_MINUTES * MIN));
+  });
+});
+
+describe("kill switch", () => {
+  it("blocks a proposed purchase: a skip decision with the kill_switch reason, and no fill, approval or PayPal call", async () => {
+    const { deps, state, paypal, mem } = setup(FILL_ORDER);
+    seedHistory(state, FILL_ORDER); // a genuine drop: the model would say fill (tier 1 here)
+    state.killSwitch = true;
+    const order = dueOrder(FILL_ORDER);
+    state.orders.push(order);
+
+    const summary = await runOrderCycle(order, deps);
+
+    expect(summary).toMatchObject({ action: "skip", execution: "none", reasoning: KILL_SWITCH_REASONING });
+    expect(mem.decisions.get("decision-1")).toMatchObject({
+      modelAction: "fill",
+      action: "skip",
+      guardrailReasons: ["kill_switch"],
+      reasoning: KILL_SWITCH_REASONING,
+    });
+    expect(mem.decisions.get("decision-1")?.explanation).toMatch(/kill switch is on/i);
+    expect(paypal.calls).toEqual([]);
+    expect(mem.fills.size).toBe(0);
+    expect(mem.approvals.size).toBe(0);
+    // The order keeps being watched.
+    expect(state.orders[0]).toMatchObject({ status: "active", next_check_at: iso(HOLD_RECHECK_MINUTES * MIN) });
+  });
+
+  it("blocks the tier-2 path too (no PayPal order is created for approval)", async () => {
+    vi.stubEnv("AGENT_READY_MERCHANTS", "");
+    try {
+      const { deps, state, paypal, mem } = setup(FILL_ORDER);
+      seedHistory(state, FILL_ORDER);
+      state.killSwitch = true;
+      const order = dueOrder(FILL_ORDER);
+      state.orders.push(order);
+
+      const summary = await runOrderCycle(order, deps);
+
+      expect(summary.action).toBe("skip");
+      expect(paypal.calls).toEqual([]);
+      expect(mem.approvals.size).toBe(0);
+      expect(mem.fills.size).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("is enforced through the tick as well", async () => {
+    const { deps, state, paypal, mem } = setup(FILL_ORDER);
+    seedHistory(state, FILL_ORDER);
+    state.killSwitch = true;
+    state.orders.push(dueOrder(FILL_ORDER));
+
+    const result = await tickOnce(deps);
+
+    expect(result.results[0]).toMatchObject({ action: "skip", reasoning: KILL_SWITCH_REASONING });
+    expect(paypal.calls).toEqual([]);
+    expect(mem.fills.size).toBe(0);
+  });
+
+  it("does not touch a decision that was not a purchase: a hold stays a normal hold", async () => {
+    const { deps, state, mem } = setup(FILL_ORDER); // no history: the model holds for Black Friday
+    state.killSwitch = true;
+    const order = dueOrder(FILL_ORDER);
+    state.orders.push(order);
+
+    const summary = await runOrderCycle(order, deps);
+
+    expect(summary.action).toBe("hold");
+    expect(mem.decisions.get("decision-1")).toMatchObject({ action: "hold", guardrailReasons: [] });
+  });
+
+  it("with it off, the same cycle buys", async () => {
+    const { deps, state, paypal } = setup(FILL_ORDER);
+    seedHistory(state, FILL_ORDER);
+    state.orders.push(dueOrder(FILL_ORDER));
+
+    const result = await tickOnce(deps);
+
+    expect(result.results[0]).toMatchObject({ action: "fill", execution: "filled" });
+    expect(paypal.calls.map((c) => c.method)).toEqual(["createAndCaptureWithVault"]);
+  });
+});
+
+describe("considered set", () => {
+  // Rows are written as one multi-row INSERT, 11 values per row.
+  const rows = (params: unknown[]) =>
+    Array.from({ length: params.length / 11 }, (_, i) => {
+      const r = params.slice(i * 11, i * 11 + 11);
+      return { orderId: r[0], productId: r[1], fit: r[6], seenAt: r[9], chosen: r[10] };
+    });
+
+  it("stores every scored product of a small check, marking only the pick as chosen", async () => {
+    const { deps, state } = setup(FILL_ORDER);
+    const order = dueOrder(FILL_ORDER);
+    state.orders.push(order);
+
+    await runOrderCycle(order, deps);
+
+    expect(state.candidates).toHaveLength(1);
+    const stored = rows(state.candidates[0]);
+    expect(stored).toHaveLength(3);
+    expect(stored.filter((r) => r.chosen).map((r) => r.productId)).toEqual(["sbx-mon-lumen27q"]);
+    expect(new Set(stored.map((r) => r.seenAt))).toEqual(new Set([FIXTURE_NOW]));
+    expect(stored.every((r) => r.orderId === FILL_ORDER.id)).toBe(true);
+  });
+
+  it("keeps only the top 5 by fit, but always keeps the pick even if it ranks lower", async () => {
+    const products = Array.from({ length: 7 }, (_, i) => ({
+      productId: `p${i + 1}`,
+      title: `Monitor ${i + 1}`,
+      merchant: "shop.example",
+      priceCents: 20000 + i,
+      url: null,
+    }));
+    // p1..p6 score 99..94 but p1..p6 each fail a must-have; only p7 (fit 72) passes, so p7 is the pick.
+    const scores = products.map((p, i) => ({
+      productId: p.productId,
+      fitScore: i === 6 ? 72 : 99 - i,
+      mustHaves: [{ requirement: "27-inch", pass: i === 6 }],
+      reasoning: "x",
+    }));
+    const { deps, state } = setup(FILL_ORDER, {
+      channel3: fixtureChannel3(products),
+      scoreModel: fixtureScoreModel(scores),
+    });
+    const order = dueOrder(FILL_ORDER);
+    state.orders.push(order);
+
+    const summary = await runOrderCycle(order, deps);
+
+    const stored = rows(state.candidates[0]);
+    expect(stored).toHaveLength(5);
+    expect(stored.map((r) => r.productId)).toEqual(["p1", "p2", "p3", "p4", "p7"]);
+    expect(stored.filter((r) => r.chosen).map((r) => r.productId)).toEqual(["p7"]);
+    expect(summary.candidate?.productId).toBe("p7");
+  });
+
+  it("stores what was considered even when nothing qualified (no pick)", async () => {
+    const products = [{ productId: "q1", title: "Q1", merchant: "shop.example", priceCents: 20000, url: null }];
+    const scores = [{ productId: "q1", fitScore: 40, mustHaves: [{ requirement: "27-inch", pass: false }], reasoning: "x" }];
+    const { deps, state } = setup(FILL_ORDER, { channel3: fixtureChannel3(products), scoreModel: fixtureScoreModel(scores) });
+    const order = dueOrder(FILL_ORDER);
+    state.orders.push(order);
+
+    const summary = await runOrderCycle(order, deps);
+
+    const stored = rows(state.candidates[0]);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].chosen).toBe(false);
+    expect(summary.candidate).toBeNull();
   });
 });
 

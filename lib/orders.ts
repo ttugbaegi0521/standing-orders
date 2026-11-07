@@ -57,7 +57,10 @@ export interface OrderDetail {
     created_at: string;
     updated_at: string;
   };
+  /** The candidate the agent most recently picked (via Channel3). */
   latest_candidate: Record<string, unknown> | null;
+  /** Everything stored from the latest check: the top-scored products, the pick first. */
+  considered: ConsideredCandidate[];
   decisions: {
     id: string;
     action: string;
@@ -82,6 +85,17 @@ export interface OrderDetail {
     error: string | null;
     created_at: string;
   }[];
+}
+
+export interface ConsideredCandidate {
+  channel3_product_id: string;
+  merchant: string;
+  title: string;
+  url: string | null;
+  price_cents: number;
+  fit_score: number;
+  chosen: boolean;
+  seen_at: string;
 }
 
 export type TransitionResult =
@@ -167,10 +181,18 @@ export function createPgOrderStore(): OrderStore {
       const order = rows[0];
       if (!order) return null;
 
-      const [candidate, decisions, approvals, fills] = await Promise.all([
+      const [candidate, considered, decisions, approvals, fills] = await Promise.all([
         pool.query(
           `SELECT channel3_product_id, merchant, title, url, price_cents, fit_score, fit_reasoning, must_haves, seen_at
-             FROM candidates WHERE order_id = $1 ORDER BY seen_at DESC LIMIT 1`,
+             FROM candidates WHERE order_id = $1 AND chosen ORDER BY seen_at DESC LIMIT 1`,
+          [orderId],
+        ),
+        pool.query<ConsideredCandidate>(
+          `SELECT channel3_product_id, merchant, title, url, price_cents, fit_score, chosen, seen_at
+             FROM candidates
+            WHERE order_id = $1
+              AND seen_at = (SELECT max(seen_at) FROM candidates WHERE order_id = $1)
+            ORDER BY chosen DESC, fit_score DESC, price_cents`,
           [orderId],
         ),
         pool.query<OrderDetail["decisions"][number]>(
@@ -195,6 +217,7 @@ export function createPgOrderStore(): OrderStore {
       return {
         order,
         latest_candidate: candidate.rows[0] ?? null,
+        considered: considered.rows,
         decisions: decisions.rows,
         open_approvals: approvals.rows.map((a) => ({ ...a, approve_url: approveUrlFor(a.paypal_order_id) })),
         fills: fills.rows,
@@ -341,4 +364,23 @@ export async function claimDueOrders(
     [[...RUNNABLE_STATUSES], now.toISOString(), limit, leaseUntil.toISOString()],
   );
   return rows;
+}
+
+// ---- Kill switch ----
+
+/** The owner's global kill switch (users.kill_switch). Null if the user does not exist. */
+export async function getKillSwitch(db: Queryable, userId: string): Promise<boolean | null> {
+  const { rows } = await db.query<{ kill_switch: boolean }>("SELECT kill_switch FROM users WHERE id = $1", [userId]);
+  return rows[0]?.kill_switch ?? null;
+}
+
+/** Sets the kill switch to `on`, or flips it when `on` is undefined. Returns the new state, or null if no such user. */
+export async function setKillSwitch(db: Queryable, userId: string, on?: boolean): Promise<boolean | null> {
+  const { rows } = await db.query<{ kill_switch: boolean }>(
+    on === undefined
+      ? "UPDATE users SET kill_switch = NOT kill_switch WHERE id = $1 RETURNING kill_switch"
+      : "UPDATE users SET kill_switch = $2 WHERE id = $1 RETURNING kill_switch",
+    on === undefined ? [userId] : [userId, on],
+  );
+  return rows[0]?.kill_switch ?? null;
 }

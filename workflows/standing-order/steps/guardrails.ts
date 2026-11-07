@@ -3,6 +3,14 @@
 import type { Action, Decision, OrderPolicy, ScoredCandidate } from "@/lib/schemas";
 import { formatUsd } from "@/lib/money";
 
+/**
+ * What a kill-switch block is recorded as. The persisted watch loop (run-order.ts) stops a proposed purchase
+ * before execute when the owner's kill switch is on, and writes the decision with these. applyGuardrails below
+ * still downgrades a buy to skip on its own, so the switch holds even for callers that skip that check.
+ */
+export const KILL_SWITCH_REASON = "kill_switch";
+export const KILL_SWITCH_REASONING = "Agent paused by kill switch — no purchase made";
+
 export interface GuardrailInput {
   decision: Decision;
   candidate: ScoredCandidate | null;
