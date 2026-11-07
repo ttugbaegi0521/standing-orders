@@ -27,3 +27,16 @@ export function getDecideModel(): LanguageModel {
 export function getScoreModel(): LanguageModel {
   return createClaudeModel();
 }
+
+/**
+ * The one rule for whether a web route uses real Claude or the fixture parser: live whenever ANTHROPIC_API_KEY
+ * is set. USE_LIVE_MODEL=false forces the fixture even with a key; USE_LIVE_MODEL=true forces live even without
+ * one (createClaudeModel then throws a clear error). Unset or empty means "decide from the key".
+ * workflow:smoke does not use this: it only goes live when USE_LIVE_MODEL=true.
+ */
+export function isLiveModelEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  const flag = env.USE_LIVE_MODEL?.trim().toLowerCase();
+  if (flag === "false") return false;
+  if (flag === "true") return true;
+  return Boolean(env.ANTHROPIC_API_KEY);
+}

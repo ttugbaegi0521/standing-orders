@@ -1,5 +1,6 @@
 // Order routes against an in-memory OrderStore (no database), plus the approvals route's status-on-fill
 // against a recording fake pool. These verify the HTTP behaviour and the flow, not the SQL text.
+import { MockLanguageModelV4 } from "ai/test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FAKE_SALE_ORDER, FILL_ORDER } from "@/fixtures/demo";
 import type { OrderDetail, OrderStatus, OrderStore, OrderSummary } from "@/lib/orders";
@@ -9,6 +10,36 @@ const h = vi.hoisted(() => ({
   store: null as unknown as OrderStore,
   queries: [] as { sql: string; params: unknown[] }[],
   captureResult: { status: "captured", capture_id: "CAP-1" } as { status: string; capture_id: string | null },
+  liveModelsBuilt: 0,
+}));
+
+// Stand-in for real Claude: refuses to build without a key (like the real one) and answers with a fixed spec.
+vi.mock("@/lib/model", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/model")>()),
+  createClaudeModel: () => {
+    if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not set");
+    h.liveModelsBuilt++;
+    const spec = {
+      category: "live-parsed gadget",
+      mustHaves: ["works"],
+      niceToHaves: [],
+      maxPriceCents: 12345,
+      constraints: [],
+      restatement: "A gadget that works, under $123.45.",
+    };
+    return new MockLanguageModelV4({
+      modelId: "mock-live-claude",
+      doGenerate: async () => ({
+        content: [{ type: "text" as const, text: JSON.stringify(spec) }],
+        finishReason: { unified: "stop" as const, raw: undefined },
+        usage: {
+          inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+          outputTokens: { total: 1, text: 1, reasoning: undefined },
+        },
+        warnings: [],
+      }),
+    });
+  },
 }));
 
 vi.mock("@/lib/orders", async (importOriginal) => ({
@@ -149,6 +180,8 @@ beforeEach(() => {
   h.captureResult = { status: "captured", capture_id: "CAP-1" };
   vi.stubEnv("DEMO_USER_ID", USER);
   vi.stubEnv("USE_LIVE_MODEL", "");
+  vi.stubEnv("ANTHROPIC_API_KEY", ""); // the default tests run on the fixture parser, whatever the shell has set
+  h.liveModelsBuilt = 0;
 });
 
 async function create(json: unknown) {
@@ -313,5 +346,45 @@ describe("POST /api/approvals/[token]: status on fill", () => {
     const res = await approve();
     expect(res.status).toBe(502);
     expect(filledUpdates()).toHaveLength(0);
+  });
+});
+
+describe("live by default (POST /api/orders parse model)", () => {
+  const unseen = () => body({ rawIntent: "a gadget the fixture parser has never heard of" });
+
+  it("with an API key and no flag, parses with live Claude", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+    const res = await create(unseen());
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(h.liveModelsBuilt).toBe(1);
+    expect(json).toMatchObject({ status: "active", spec: { category: "live-parsed gadget" } });
+    expect(db.rows[0]).toMatchObject({ status: "active", maxPriceCents: 12345 });
+  });
+
+  it("USE_LIVE_MODEL=false forces the fixture parser even with a key", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+    vi.stubEnv("USE_LIVE_MODEL", "false");
+    const json = await (await create(unseen())).json();
+
+    expect(h.liveModelsBuilt).toBe(0);
+    expect(json).toMatchObject({ status: "needs_review", spec: null });
+  });
+
+  it("without a key it falls back to the fixture parser", async () => {
+    const json = await (await create(body())).json(); // a seeded intent
+    expect(h.liveModelsBuilt).toBe(0);
+    expect(json).toMatchObject({ status: "active", spec: { category: "computer monitor" } });
+  });
+
+  it("isLiveModelEnabled: key decides unless the flag says otherwise", async () => {
+    const { isLiveModelEnabled } = await vi.importActual<typeof import("@/lib/model")>("@/lib/model");
+    expect(isLiveModelEnabled({})).toBe(false);
+    expect(isLiveModelEnabled({ ANTHROPIC_API_KEY: "k" })).toBe(true);
+    expect(isLiveModelEnabled({ ANTHROPIC_API_KEY: "k", USE_LIVE_MODEL: "" })).toBe(true);
+    expect(isLiveModelEnabled({ ANTHROPIC_API_KEY: "k", USE_LIVE_MODEL: "false" })).toBe(false);
+    expect(isLiveModelEnabled({ ANTHROPIC_API_KEY: "k", USE_LIVE_MODEL: "FALSE " })).toBe(false);
+    expect(isLiveModelEnabled({ USE_LIVE_MODEL: "true" })).toBe(true);
   });
 });
