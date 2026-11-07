@@ -8,5 +8,6 @@ export default defineConfig({
   test: {
     include: ["**/*.test.ts"],
     exclude: ["node_modules/**", ".next/**"],
+    setupFiles: ["./tests/setup.ts"],
   },
 });

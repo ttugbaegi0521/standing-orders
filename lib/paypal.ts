@@ -1,6 +1,8 @@
 // Every PayPal call goes through this file. The LLM never reaches it, and the vault
 // token never leaves it: callers pass a userId and this module looks the token up.
-import { NotWiredError } from "@/lib/errors";
+import { randomUUID } from "node:crypto";
+import { decryptSecret, encryptSecret } from "@/lib/crypto";
+import { getPool } from "@/lib/db";
 
 // ---- Workflow-facing client (used by workflows/standing-order/steps/execute.ts) ----
 
@@ -10,30 +12,72 @@ export interface PayPalOrderParams {
   description: string;
   /** Sent as PayPal-Request-Id so retried workflow steps don't double-charge. */
   idempotencyKey: string;
+  /** Tier 2: where PayPal sends the buyer after they approve / cancel. */
+  returnUrl?: string;
+  cancelUrl?: string;
 }
 
 export interface PayPalClient {
   /** Tier 1: create + capture against the user's vaulted payment method. */
-  createAndCaptureWithVault(
-    params: PayPalOrderParams & { userId: string },
-  ): Promise<{ paypalOrderId: string; status: "captured" | "failed" }>;
+  createAndCaptureWithVault(params: PayPalOrderParams & { userId: string }): Promise<{
+    paypalOrderId: string;
+    /** `pending` = PayPal is holding the capture; money has not moved yet. */
+    status: "captured" | "pending" | "failed";
+    captureId?: string | null;
+  }>;
   /** Tier 2: create an order the user approves via a link. */
   createOrder(params: PayPalOrderParams): Promise<{ paypalOrderId: string; approveUrl: string }>;
   /** Tier 2: capture after the user approves. */
-  captureOrder(paypalOrderId: string): Promise<{ status: "captured" | "failed" }>;
+  captureOrder(
+    paypalOrderId: string,
+  ): Promise<{ status: "captured" | "failed"; captureId?: string | null }>;
+}
+
+function toClientStatus(status: StoreOrderStatus): "captured" | "pending" | "failed" {
+  if (status === "captured") return "captured";
+  return status === "approved" || status === "created" ? "pending" : "failed";
+}
+
+function appBase(): string {
+  return (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
 }
 
 export function createPayPalClient(): PayPalClient {
-  // TODO(Sun): back these with the REST functions below + Vault.
   return {
-    async createAndCaptureWithVault() {
-      throw new NotWiredError("PayPal createAndCaptureWithVault");
+    async createAndCaptureWithVault({ userId, amountCents, description, idempotencyKey }) {
+      // The decrypted vault token lives only inside this call.
+      const paymentTokenId = await loadVaultToken(userId);
+      const result = await createOrderWithVaultedToken({
+        amount_cents: amountCents,
+        currency: "USD",
+        reference_id: idempotencyKey,
+        payment_token_id: paymentTokenId,
+        description,
+      });
+      return {
+        paypalOrderId: result.paypal_order_id,
+        status: toClientStatus(result.status),
+        captureId: result.capture_id,
+      };
     },
-    async createOrder() {
-      throw new NotWiredError("PayPal createOrder");
+    async createOrder({ amountCents, description, idempotencyKey, returnUrl, cancelUrl }) {
+      const order = await createOrder({
+        amount_cents: amountCents,
+        currency: "USD",
+        reference_id: idempotencyKey,
+        description,
+        return_url: returnUrl ?? `${appBase()}/approvals/done`,
+        cancel_url: cancelUrl ?? `${appBase()}/approvals/cancelled`,
+        request_id: idempotencyKey,
+      });
+      return { paypalOrderId: order.paypal_order_id, approveUrl: order.approve_url };
     },
-    async captureOrder() {
-      throw new NotWiredError("PayPal captureOrder");
+    async captureOrder(paypalOrderId) {
+      const result = await captureOrder(paypalOrderId);
+      return {
+        status: result.status === "captured" ? "captured" : "failed",
+        captureId: result.capture_id,
+      };
     },
   };
 }
@@ -307,4 +351,107 @@ export async function verifyWebhookSignature(headers: Headers, rawBody: string):
   }
   const json = (await res.json()) as { verification_status?: string };
   return json.verification_status === "SUCCESS";
+}
+
+// ---- Vault (saved PayPal payment method) ----
+
+export interface SetupToken {
+  setup_token: string;
+  /** Send the user here to approve saving their PayPal as a payment method. */
+  approve_url: string;
+}
+
+/** Enrollment step 1. PayPal appends `approval_token_id` (the setup token) to the return URL. */
+export async function createSetupToken(params: {
+  user_id: string;
+  return_url?: string;
+  cancel_url?: string;
+}): Promise<SetupToken> {
+  const res = await paypalRequest<{ id: string; links?: PayPalLink[] }>("POST", "/v3/vault/setup-tokens", {
+    requestId: `setup-${params.user_id}-${randomUUID()}`,
+    body: {
+      customer: { merchant_customer_id: params.user_id },
+      payment_source: {
+        paypal: {
+          usage_type: "MERCHANT",
+          customer_type: "CONSUMER",
+          experience_context: {
+            return_url: params.return_url ?? `${appBase()}/api/users/me/vault/return`,
+            cancel_url: params.cancel_url ?? `${appBase()}/`,
+          },
+        },
+      },
+    },
+  });
+  const approve = res.links?.find((l) => l.rel === "approve");
+  if (!approve) throw new PayPalError(`PayPal setup token ${res.id} has no approval link`, 502);
+  return { setup_token: res.id, approve_url: approve.href };
+}
+
+/** Enrollment step 2: the approved setup token becomes a reusable payment token id. */
+export async function exchangeSetupTokenForPaymentToken(
+  setup_token: string,
+): Promise<{ payment_token_id: string }> {
+  const res = await paypalRequest<{ id: string }>("POST", "/v3/vault/payment-tokens", {
+    requestId: `exchange-${setup_token}`,
+    body: { payment_source: { token: { id: setup_token, type: "SETUP_TOKEN" } } },
+  });
+  return { payment_token_id: res.id };
+}
+
+/** Exchanges an approved setup token and stores the payment token encrypted on the user. */
+export async function enrollVaultedPaymentMethod(user_id: string, setup_token: string): Promise<void> {
+  const { payment_token_id } = await exchangeSetupTokenForPaymentToken(setup_token);
+  const { rowCount } = await getPool().query(
+    "UPDATE users SET paypal_vault_token_enc = $2 WHERE id = $1",
+    [user_id, encryptSecret(payment_token_id)],
+  );
+  if (!rowCount) throw new Error(`user ${user_id} not found`);
+}
+
+export async function hasVaultedPaymentMethod(user_id: string): Promise<boolean> {
+  const { rows } = await getPool().query<{ enrolled: boolean }>(
+    "SELECT paypal_vault_token_enc IS NOT NULL AS enrolled FROM users WHERE id = $1",
+    [user_id],
+  );
+  return rows[0]?.enrolled ?? false;
+}
+
+/** Not exported: the decrypted token must not leave this module. */
+async function loadVaultToken(user_id: string): Promise<string> {
+  const { rows } = await getPool().query<{ paypal_vault_token_enc: string | null }>(
+    "SELECT paypal_vault_token_enc FROM users WHERE id = $1",
+    [user_id],
+  );
+  const enc = rows[0]?.paypal_vault_token_enc;
+  if (!enc) throw new Error(`user ${user_id} has no vaulted PayPal payment method`);
+  return decryptSecret(enc);
+}
+
+/**
+ * Creates and captures in one call: with a vaulted payment token PayPal completes the order
+ * immediately, no buyer approval. `reference_id` doubles as PayPal-Request-Id, so retries don't double-charge.
+ */
+export async function createOrderWithVaultedToken(params: {
+  amount_cents: number;
+  currency: string;
+  reference_id: string;
+  payment_token_id: string;
+  description?: string;
+}): Promise<CapturedOrder> {
+  const order = await paypalRequest<PayPalOrderResponse>("POST", "/v2/checkout/orders", {
+    requestId: params.reference_id,
+    body: {
+      intent: "CAPTURE",
+      purchase_units: [
+        {
+          reference_id: params.reference_id,
+          description: params.description,
+          amount: { currency_code: params.currency, value: centsToValue(params.amount_cents) },
+        },
+      ],
+      payment_source: { paypal: { vault_id: params.payment_token_id } },
+    },
+  });
+  return summarizeCapture(order);
 }

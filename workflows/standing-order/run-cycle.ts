@@ -90,6 +90,7 @@ export async function runCycle(input: CycleInput, deps: CycleDeps): Promise<Cycl
       candidate,
       reasoning: decided.output.decision.reasoning,
       guardrailReasons: guardrails.reasons,
+      priceSignals: decided.output.priceSignals,
       appBaseUrl: input.appBaseUrl,
       now: input.now,
     },
