@@ -41,6 +41,15 @@ npm run dev
 - `db/migrations/0001_init.sql` — schema
 - `fixtures/demo.ts`, `fixtures/fakes.ts` — demo orders and fake clients
 
+## Demo: full workflow
+
+```sh
+npm run db:migrate && npm run db:seed
+npm run workflow:smoke
+```
+
+The script drives both seeded orders through the real steps against Postgres and the PayPal sandbox (tier 2 only, no Vault, no Anthropic calls). For the monitor it prints an approval link: click it, log in as the sandbox personal buyer, approve, come back and press Enter to capture. The headphones are skipped automatically and the fake-sale reasoning is printed, with no PayPal call.
+
 ## Tests
 
 ```sh
