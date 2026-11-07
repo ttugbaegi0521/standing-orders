@@ -48,6 +48,19 @@ export async function POST(_req: Request, ctx: RouteContext<"/api/approvals/[tok
       "UPDATE approvals SET resolution = 'approved', resolved_at = now() WHERE id = $1 AND resolved_at IS NULL",
       [approval.id],
     );
+    if (status === "captured") {
+      // The money moved, so the order is filled. Its own try/catch: a failure here must not fall into the
+      // outer catch, which would mark a captured fill as failed.
+      try {
+        await db.query(
+          `UPDATE standing_orders SET status = 'filled', updated_at = now()
+            WHERE id = (SELECT order_id FROM decisions WHERE id = $1) AND status <> 'filled'`,
+          [approval.decision_id],
+        );
+      } catch (err) {
+        console.error("[approvals] captured, but could not mark the order filled:", (err as Error).message);
+      }
+    }
     return Response.json({ status, capture_id: captured.capture_id });
   } catch (err) {
     const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);

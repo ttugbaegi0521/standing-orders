@@ -52,6 +52,22 @@ The script drives both seeded orders through the real steps against Postgres and
 
 By default the scoring and decide steps use fixture models and search uses fixture products, so tests and CI need no API key. `USE_LIVE_MODEL=true npm run workflow:smoke` runs both the scoring step and the decide step against live Claude (needs `ANTHROPIC_API_KEY`), and each live call is recorded in `llm_calls`. `USE_LIVE_CHANNEL3=true` makes search call the real Channel3 API (needs `CHANNEL3_API_KEY`); the two flags are independent, and the run prints the active modes first. `USE_LIVE_CHANNEL3=true USE_LIVE_MODEL=true npm run workflow:smoke` now scores real Channel3 products with live Claude, then decides on the top one. Live failures are reported, never replaced by the fixtures. Two limits to expect, not bugs: Channel3 returns no price history, so the fake-sale refusal still depends on the seeded `price_points` (keyed to the seeded product ids), and the scorer only sees each product's title, merchant and price, so a must-have it cannot show (such as free returns) fails and can leave a live order with no candidate. `npm run channel3:smoke` is a one-call connectivity check that prints five live results.
 
+## Orders API
+
+Orders belong to `DEMO_USER_ID` (no auth yet). `POST /api/orders` inserts the order and runs the parse-intent step to fill in its spec: with `USE_LIVE_MODEL=true` that is live Claude, otherwise the fixture parser, which only recognises the two seeded intents. If the parse fails the order is still created, as `needs_review`, and the response carries a `warning`.
+
+```sh
+curl -X POST http://localhost:3000/api/orders   -H 'Content-Type: application/json'   -d '{"rawIntent":"a good 27-inch IPS monitor for coding, under $300, free returns","perOrderCapCents":30000,"monthlyCapCents":60000,"merchantAllowlist":["acme-electronics"]}'
+# 201 {"id":"…","status":"active","spec":{…}}
+
+curl http://localhost:3000/api/orders          # list, newest first, with each order's latest decision action
+curl http://localhost:3000/api/orders/<id>     # spec, latest candidate, decisions, open approvals, fills
+curl -X POST http://localhost:3000/api/orders/<id>/pause
+curl -X POST http://localhost:3000/api/orders/<id>/cancel
+```
+
+Statuses: `active`, `needs_review`, `paused`, `filled`, `cancelled`. Only `active` orders may be advanced by a cycle run (`RUNNABLE_STATUSES` in `lib/orders.ts`), so paused, cancelled, filled and needs-review orders are skipped by the future tick loop. A captured tier-2 approval sets the order to `filled`. Nothing runs cycles on a schedule yet; `npm run workflow:smoke` is still the only driver.
+
 ## Tests
 
 ```sh
