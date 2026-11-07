@@ -2,12 +2,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { getPool } from "@/lib/db";
 import { demoUserId, getOrderStore, UUID_RE, type OrderDetail } from "@/lib/orders";
-import { dollars, formatWhen } from "../../_components/format";
+import { getPriceHistory } from "@/lib/price-history";
+import type { PricePoint } from "@/lib/schemas";
+import { CheckNowButton } from "../../_components/CheckNowButton";
+import { LocalTime } from "../../_components/LocalTime";
+import { PriceChart } from "../../_components/PriceChart";
+import { dollars } from "../../_components/format";
 import { OrderActions } from "../../_components/order-actions";
 import { ActionPill, Mono, Notice, OrderStatusPill, SectionTitle, Shell, buttonPrimary } from "../../_components/ui";
 
 interface CandidateRow {
+  channel3_product_id: string;
   merchant: string;
   title: string;
   url: string | null;
@@ -32,31 +39,30 @@ function List({ items, empty }: { items: string[]; empty: string }) {
   );
 }
 
+/** "Kill switch is on: ..." reads better mid-sentence as "kill switch is on: ...". */
+function inSentence(reason: string): string {
+  const r = reason.replace(/[.\s]+$/, "");
+  return /^[A-Z][a-z]/.test(r) ? r[0].toLowerCase() + r.slice(1) : r;
+}
+
 function Decision({ d }: { d: OrderDetail["decisions"][number] }) {
   const changed = d.model_action !== d.action;
+  const because = d.guardrail_reasons.filter(Boolean).map(inSentence).join("; ");
   return (
-    <li className="border-t border-[#e7e5df] py-6 first:border-t-0 first:pt-0">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <li className="border-t border-[#e7e5df] py-4 first:border-t-0 first:pt-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <ActionPill action={d.action} />
-        <Mono className="text-xs text-[#6b6a64]">{formatWhen(d.created_at)}</Mono>
+        <LocalTime iso={d.created_at} mode="both" className="font-mono text-xs tabular-nums text-[#6b6a64]" />
       </div>
-      {changed && (
-        <p className="mt-3 text-sm">
-          The model said <strong>{d.model_action}</strong> → guardrails changed it to <strong>{d.action}</strong>
-          {d.guardrail_reasons.length > 0 ? " because:" : "."}
+      {changed ? (
+        <p className="mt-2 text-sm text-[#3a3935]">
+          Claude proposed <strong>{d.model_action}</strong> → guardrails changed it to <strong>{d.action}</strong>
+          {because ? ` because ${because}.` : "."}
         </p>
+      ) : (
+        because && <p className="mt-2 text-sm text-[#6b6a64]">Guardrail note: {because}.</p>
       )}
-      {d.guardrail_reasons.length > 0 && (
-        <ul className="mt-2 space-y-1 text-sm text-[#6b6a64]">
-          {d.guardrail_reasons.map((r) => (
-            <li key={r} className="pl-4 -indent-4 before:mr-2 before:content-['–']">
-              {r}
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="mt-3 max-w-prose leading-relaxed">{d.reasoning}</p>
-      {d.explanation && <p className="mt-2 max-w-prose text-sm italic text-[#6b6a64]">{d.explanation}</p>}
+      <p className="mt-2 max-w-prose text-[0.95rem] leading-relaxed">{d.reasoning}</p>
     </li>
   );
 }
@@ -95,6 +101,16 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
   const spec = order.spec;
   const candidate = detail.latest_candidate as CandidateRow | null;
 
+  // History for the product the agent is currently looking at. Any failure just shows the chart's empty state.
+  let history: PricePoint[] = [];
+  if (candidate) {
+    try {
+      history = await getPriceHistory(getPool(), candidate.channel3_product_id);
+    } catch (err) {
+      console.error("[orders/[id]] could not load price history:", (err as Error).message);
+    }
+  }
+
   return (
     <>
       <Link href="/orders" className="text-sm text-[#6b6a64] hover:text-[#1c1b19]">
@@ -118,7 +134,8 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
         </div>
       )}
 
-      <div className="mb-14">
+      <div className="mb-14 flex flex-wrap items-center gap-3">
+        <CheckNowButton orderId={order.id} disabled={order.status !== "active" && order.status !== "needs_review"} />
         <OrderActions orderId={order.id} status={order.status} />
       </div>
 
@@ -137,7 +154,9 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
                     Approve purchase
                   </a>
                 )}
-                <span className="text-sm text-[#5b6aa8]">Expires {formatWhen(a.expires_at)}</span>
+                <span className="text-sm text-[#5b6aa8]">
+                  Expires <LocalTime iso={a.expires_at} mode="both" />
+                </span>
               </div>
             </div>
           ))}
@@ -236,7 +255,8 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
               <Mono className="text-lg">{dollars(candidate.price_cents)}</Mono>
             </div>
             <p className="mt-2 text-sm text-[#6b6a64]">
-              {candidate.merchant} · fit <Mono>{candidate.fit_score}</Mono>/100 · seen {formatWhen(candidate.seen_at)}
+              {candidate.merchant} · fit <Mono>{candidate.fit_score}</Mono>/100 · seen{" "}
+              <LocalTime iso={candidate.seen_at} mode="both" />
             </p>
             <p className="mt-3 max-w-prose text-[0.95rem] leading-relaxed">{candidate.fit_reasoning}</p>
             {candidate.must_haves && candidate.must_haves.length > 0 && (
@@ -252,6 +272,11 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
         ) : (
           <p className="text-[#6b6a64]">No candidate yet. One appears after the first check.</p>
         )}
+      </section>
+
+      <section className="mb-14">
+        <SectionTitle>Price history</SectionTitle>
+        <PriceChart points={history} maxPriceCents={order.max_price_cents ?? spec?.maxPriceCents ?? null} />
       </section>
 
       <section>

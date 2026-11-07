@@ -88,6 +88,7 @@ Cancelling an order also blocks its outstanding approval links: capturing one an
 - `/` landing; `/orders` your orders with status and latest decision; `/orders/new` create one (you confirm the parsed restatement before it is watched).
 - `/orders/[id]` the parsed spec, current candidate, every decision (with the guardrail changes spelled out), any open approval, purchases, and **Check now** / Pause / Cancel. Check now runs one live cycle immediately (`POST /api/orders/[id]/check`; needs `ANTHROPIC_API_KEY` and `CHANNEL3_API_KEY`, answers 503 without them).
 - `/approvals/[token]` is where PayPal returns the buyer after they approve; it captures the payment and shows the confirmation.
+- Timestamps show in your own timezone (with a relative "2 hours ago" and the full time on hover); the first paint shows UTC until the browser swaps in local time. The dashboard ranks watching orders first and mutes filled and cancelled ones, with a count line on top. The detail page charts the current candidate's price history against your max; it needs two or more recorded prices (one is recorded each time the agent checks), so a new order shows a quiet empty state until it has been checked a couple of times.
 - Orders belong to `DEMO_USER_ID`; there is no sign-in yet.
 
 ## Tests
