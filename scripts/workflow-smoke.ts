@@ -2,7 +2,8 @@
 // the monitor produces an approval link (you approve as the sandbox buyer, press Enter, we capture),
 // the headphones are skipped as a fake sale with no PayPal call at all.
 //
-// No Anthropic calls (fixture score + decide models), no Vault. Needs DATABASE_URL (migrated + seeded),
+// Fixture score model; the decide step uses the fixture model unless USE_LIVE_MODEL=true (then real Claude,
+// needs ANTHROPIC_API_KEY). No Vault. Needs DATABASE_URL (migrated + seeded),
 // PAYPAL_CLIENT_ID/SECRET and DEMO_USER_ID. AGENT_READY_MERCHANTS must be empty/unset so everything is tier 2.
 // Usage: npm run workflow:smoke
 import { randomUUID } from "node:crypto";
@@ -11,6 +12,8 @@ import { POST as captureApproval } from "@/app/api/approvals/[token]/route";
 import { FIXTURE_ORDERS, type FixtureOrder } from "@/fixtures/demo";
 import { fixtureChannel3, fixtureScoreModel, rulesDecideModel } from "@/fixtures/fakes";
 import { getPool } from "@/lib/db";
+import { recordLlmCall, type LlmCallLog } from "@/lib/llm-log";
+import { getDecideModel } from "@/lib/model";
 import { consoleNotifier, type Notifier } from "@/lib/notify";
 import { createPayPalClient } from "@/lib/paypal";
 import { OrderPolicySchema, SpecSchema, type PricePoint } from "@/lib/schemas";
@@ -24,6 +27,7 @@ import {
 import { applyGuardrails } from "@/workflows/standing-order/steps/guardrails";
 import { searchAndScore } from "@/workflows/standing-order/steps/search-and-score";
 
+const USE_LIVE_MODEL = process.env.USE_LIVE_MODEL === "true";
 const POLL_MS = 3_000;
 const POLL_TIMEOUT_MS = 60_000;
 
@@ -86,10 +90,26 @@ async function runOrder(row: OrderRow, fixture: FixtureOrder, notifier: Notifier
     priceHistory = rows.map((r) => ({ priceCents: r.price_cents, observedAt: r.observed_at.toISOString() }));
   }
 
-  const decided = await decide(
-    { spec, candidate, priceHistory, now, saleEvents: SALE_EVENTS, policy },
-    { model: rulesDecideModel },
-  );
+  const decisionId = randomUUID();
+  const decideInput = { spec, candidate, priceHistory, now, saleEvents: SALE_EVENTS, policy };
+  // The llm_calls row references decisions(id), which execute writes later, so hold live-model audit rows
+  // until then. If decide fails, execute never runs and the row is logged without a decision id.
+  const pendingLlmLogs: LlmCallLog[] = [];
+  let decided;
+  if (USE_LIVE_MODEL) {
+    const live = await decide(
+      decideInput,
+      { model: getDecideModel(), recordLlmCall: async (call) => void pendingLlmLogs.push(call) },
+      { orderId: row.id, decisionId },
+    );
+    if (!live.ok) {
+      for (const call of pendingLlmLogs) await recordLlmCall({ ...call, decision_id: null });
+      throw new Error(`decide (live model) failed: ${live.error.kind}: ${live.error.message}`);
+    }
+    decided = live;
+  } else {
+    decided = await decide(decideInput, { model: rulesDecideModel });
+  }
   const guardrails = applyGuardrails({
     decision: decided.output.decision,
     candidate,
@@ -98,7 +118,6 @@ async function runOrder(row: OrderRow, fixture: FixtureOrder, notifier: Notifier
     monthToDateSpendCents: Number(spend[0]?.cents ?? 0),
   });
 
-  const decisionId = randomUUID();
   const execution = await executeOrNotify(
     {
       orderId: row.id,
@@ -121,6 +140,7 @@ async function runOrder(row: OrderRow, fixture: FixtureOrder, notifier: Notifier
       persistence: createPgExecutePersistence(),
     },
   );
+  for (const call of pendingLlmLogs) await recordLlmCall(call);
   return { decisionId, candidate, decision: decided.output.decision, signals: decided.output.priceSignals, guardrails, execution };
 }
 
@@ -224,6 +244,7 @@ async function driveRefusal(row: OrderRow, fixture: FixtureOrder): Promise<{ rea
 }
 
 async function main() {
+  console.log(`decide model: ${USE_LIVE_MODEL ? "live claude" : "fake"}`);
   const userId = process.env.DEMO_USER_ID;
   if (!userId) throw new Error("DEMO_USER_ID is not set");
   if ((process.env.AGENT_READY_MERCHANTS ?? "").trim()) {
@@ -243,8 +264,17 @@ async function main() {
   const refusalRow = byId.get(refusalFixture.id);
   if (!fillRow || !refusalRow) throw new Error("Seeded orders not found for DEMO_USER_ID. Run: npm run db:migrate && npm run db:seed");
 
-  const fill = await driveFill(fillRow, fillFixture);
-  const refusal = await driveRefusal(refusalRow, refusalFixture);
+  // A failing live model on one order should not hide the other's result.
+  const attempt = async <T extends { ok: boolean }>(run: () => Promise<T>, failed: T): Promise<T> => {
+    try {
+      return await run();
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : err);
+      return failed;
+    }
+  };
+  const fill = await attempt(() => driveFill(fillRow, fillFixture), { captureId: null, ok: false });
+  const refusal = await attempt(() => driveRefusal(refusalRow, refusalFixture), { reason: null, ok: false });
 
   section("Summary");
   console.log(`Fill: ${fill.captureId ?? "NONE"} Refusal: ${refusal.reason ?? "NONE"}`);

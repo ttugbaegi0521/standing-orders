@@ -50,6 +50,8 @@ npm run workflow:smoke
 
 The script drives both seeded orders through the real steps against Postgres and the PayPal sandbox (tier 2 only, no Vault, no Anthropic calls). For the monitor it prints an approval link: click it, log in as the sandbox personal buyer, approve, come back and press Enter to capture. The headphones are skipped automatically and the fake-sale reasoning is printed, with no PayPal call.
 
+By default the decide step uses the fixture model, so tests and CI need no API key. `USE_LIVE_MODEL=true npm run workflow:smoke` runs the decide step against the live Claude model instead (needs `ANTHROPIC_API_KEY`); the run prints `decide model: live claude` or `decide model: fake` first, and each live call is recorded in `llm_calls`.
+
 ## Tests
 
 ```sh

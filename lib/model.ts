@@ -17,3 +17,8 @@ export function createClaudeModel(): LanguageModel {
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set");
   return createAnthropic({ apiKey })(CLAUDE_MODEL_ID);
 }
+
+/** Model for the decide step (step 3). Same model id as every other step. */
+export function getDecideModel(): LanguageModel {
+  return createClaudeModel();
+}
