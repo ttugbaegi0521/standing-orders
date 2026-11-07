@@ -25,9 +25,19 @@ export interface FixtureOrder {
    * realistic series like the live loop would record (tests keep using the denser `priceHistory`).
    */
   seedHistory?: (now: string) => Record<string, PricePoint[]>;
+  /**
+   * What scripts/seed.ts checks the seeded history against (via price-signals.ts), so a demo cannot quietly
+   * stop working: whether it must read as a fake sale, and for a genuine drop how far below baseline it must be.
+   */
+  seedExpectation?: { fakeSale: boolean; minDropPct?: number };
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** One observation `daysAgo` days before `now`. */
+function observed(now: string, daysAgo: number, priceCents: number): PricePoint {
+  return { priceCents, observedAt: new Date(Date.parse(now) - daysAgo * DAY_MS).toISOString() };
+}
 
 /** One observation per day from `fromDaysAgo` down to `toDaysAgo` (inclusive). */
 function daily(now: string, fromDaysAgo: number, toDaysAgo: number, priceCents: number): PricePoint[] {
@@ -118,6 +128,23 @@ export const FILL_ORDER: FixtureOrder = {
   priceHistory: (now) => ({
     "sbx-mon-lumen27q": daily(now, 45, 1, 27900),
   }),
+  // Nine observations over 25 days, as the live loop would collect them: steady around $279 for weeks (four
+  // baseline points older than 14 days, median $279), no spike, then today's $249 (the fixture price): a genuine
+  // 10.8% drop to the 30-day low, so the decide step should buy rather than wait for Black Friday.
+  seedHistory: (now) => ({
+    "sbx-mon-lumen27q": [
+      observed(now, 25, 27900),
+      observed(now, 21, 27900),
+      observed(now, 18, 28400),
+      observed(now, 15, 27900),
+      observed(now, 11, 27900),
+      observed(now, 8, 27900),
+      observed(now, 5, 27900),
+      observed(now, 2, 27900),
+      observed(now, 0, 24900),
+    ],
+  }),
+  seedExpectation: { fakeSale: false, minDropPct: 0.1 },
 };
 
 // ---- Order B: refused (list price inflated last week, then "discounted") ----
@@ -185,25 +212,20 @@ export const FAKE_SALE_ORDER: FixtureOrder = {
   }),
   // Nine observations over 25 days, as the live loop would collect them: about $229 for weeks (four baseline
   // points older than 14 days), a jump to $349 eight days ago, and today's "on sale" $239 (the fixture price).
-  seedHistory: (now) => {
-    const at = (daysAgo: number, priceCents: number): PricePoint => ({
-      priceCents,
-      observedAt: new Date(Date.parse(now) - daysAgo * DAY_MS).toISOString(),
-    });
-    return {
-      "ch3-hp-quietwave9": [
-        at(25, 22900),
-        at(21, 22900),
-        at(18, 23100),
-        at(15, 22900),
-        at(11, 22900),
-        at(8, 34900),
-        at(5, 34900),
-        at(2, 34900),
-        at(0, 23900),
-      ],
-    };
-  },
+  seedHistory: (now) => ({
+    "ch3-hp-quietwave9": [
+      observed(now, 25, 22900),
+      observed(now, 21, 22900),
+      observed(now, 18, 23100),
+      observed(now, 15, 22900),
+      observed(now, 11, 22900),
+      observed(now, 8, 34900),
+      observed(now, 5, 34900),
+      observed(now, 2, 34900),
+      observed(now, 0, 23900),
+    ],
+  }),
+  seedExpectation: { fakeSale: true },
 };
 
 export const FIXTURE_ORDERS = [FILL_ORDER, FAKE_SALE_ORDER];

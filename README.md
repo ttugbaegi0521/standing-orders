@@ -74,14 +74,19 @@ The toggle in the `/orders` header (or `GET`/`POST /api/kill-switch`; `{ "on": t
 
 Each check also stores the top five scored products (migration `0007_candidates.sql` adds `candidates.chosen`), and the order page lists them under "Considered N products via Channel3" with the pick marked. Note the label describes the live path: orders created by `db:seed`/`demo-run` show fixture products under the same label.
 
-## Demo: the refusal in the browser, from seed data alone
+## Demo: the refusal and the purchase in the browser, from seed data alone
 
 ```sh
 npm run db:migrate && npm run db:seed
 npm run demo-run
 ```
 
-`db:seed` writes the headphones order with nine price observations over 25 days (about $229 for weeks, a jump to $349 eight days ago, now "on sale" at $239) and its current candidate; it checks that history against the real fake-sale thresholds and refuses to seed if it would not trigger. Reseeding resets the demo orders' decisions, fills and price points. `demo-run` then runs one real persisted cycle over that candidate and history, so the skip decision is produced by the decide step, not inserted: live Claude when `ANTHROPIC_API_KEY` is set (`USE_LIVE_MODEL=false` forces the fixture model), otherwise the fixture model. Search and scoring use the fixtures and PayPal is stubbed to refuse, so it never calls Channel3 and can never buy anything. Open `/orders` and the headphones order to see the chart with the spike and the "fake sale" reasoning. If you run `demo-run` right after seeding, the current price is not recorded a second time (an identical price within the last hour is skipped).
+`db:seed` writes both demo orders with nine price observations each over 25 days, plus each order's current candidate, and checks the history against the real thresholds (`price-signals.ts`), refusing to seed if it would not read the intended way. Reseeding resets the demo orders' decisions, fills and price points. `demo-run` then runs one real persisted cycle per order over that candidate and history, so the decisions are produced by the decide step, not inserted:
+
+- **Headphones: the refusal.** About $229 for weeks, a jump to $349 eight days ago, now "on sale" at $239: a fake sale. The order is skipped with the reasoning shown, and PayPal is stubbed to refuse, so this order can never buy.
+- **Monitor: accept, approve, buy.** About $279 for weeks, now $249 (10.8% below baseline, the 30-day low, no spike): a genuine drop, so the agent chooses to buy instead of waiting for Black Friday. It goes through tier 2: a pending fill, an approval, and an un-captured PayPal sandbox order (needs `PAYPAL_CLIENT_ID`/`PAYPAL_CLIENT_SECRET`). `demo-run` prints the approval URL. **You finish the purchase in the browser:** open the monitor order, click **Approve purchase**, approve on PayPal as the sandbox buyer, and the return page captures the payment and flips the order to **Filled**. Tier 2 is used whatever `AGENT_READY_MERCHANTS` says, since Vault is blocked in the sandbox. Running `demo-run` again while that approval is open does not create a second PayPal order.
+
+The decide step is live Claude when `ANTHROPIC_API_KEY` is set (`USE_LIVE_MODEL=false` forces the fixture model), otherwise the fixture model. Search and scoring use the fixtures, so Channel3 is never called. The monitor's drop is only just past the 10% line the decide step treats as worth buying with a sale event nearby, so a live model can occasionally choose to wait; `demo-run` says so, and rerunning or using the fixture model gives the deterministic result. If you run `demo-run` right after seeding, the current price is not recorded a second time (an identical price within the last hour is skipped).
 
 ## The watch loop (`POST /api/tick`, `npm run tick`)
 

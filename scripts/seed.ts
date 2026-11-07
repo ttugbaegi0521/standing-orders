@@ -1,10 +1,10 @@
-// Seeds the demo user, both demo standing orders, and their price history (relative to now). The headphones order
-// also gets its current candidate, so the order page can chart the fake-sale spike straight away; the refusal itself
-// is not seeded: run `npm run demo-run` to produce it by running the decide step.
+// Seeds the demo user, both demo standing orders, and their price history (relative to now). Each order also gets
+// its current candidate, so the order page can chart straight away. The decisions themselves are not seeded: run
+// `npm run demo-run` to produce them (headphones: refused as a fake sale; monitor: accepted, awaiting approval).
 // Idempotent: re-running resets the demo rows (including price points for the demo products, whatever their source).
 // Usage: DATABASE_URL=postgres://... npm run db:seed
 import { Client } from "pg";
-import { DEMO_USER, FAKE_SALE_ORDER, FIXTURE_ORDERS } from "@/fixtures/demo";
+import { DEMO_USER, FIXTURE_ORDERS } from "@/fixtures/demo";
 import { analyzePriceHistory } from "@/workflows/standing-order/price-signals";
 
 async function main() {
@@ -58,32 +58,50 @@ async function main() {
         );
       }
     }
-    // The headphones demo only works if this history really reads as a fake sale: check it against the real
-    // thresholds (price-signals.ts) instead of trusting the numbers, and seed the candidate it belongs to.
-    const product = FAKE_SALE_ORDER.products[0];
-    const score = FAKE_SALE_ORDER.scores.find((s) => s.productId === product.productId)!;
-    const seeded = FAKE_SALE_ORDER.seedHistory!(now)[product.productId];
-    const signals = analyzePriceHistory(seeded, product.priceCents, now);
-    if (!signals.fakeSale.detected) {
-      throw new Error(`the seeded headphones history does not read as a fake sale: ${JSON.stringify(signals)}`);
+    // Each demo only works if its history really reads the way it is meant to (a fake sale for the headphones,
+    // a genuine drop for the monitor): check it against the real thresholds (price-signals.ts) instead of
+    // trusting the numbers, and seed the candidate it belongs to (the order's top-scored fixture product).
+    for (const order of FIXTURE_ORDERS) {
+      if (!order.seedHistory || !order.seedExpectation) continue;
+      const product = order.products[0];
+      const score = order.scores.find((s) => s.productId === product.productId)!;
+      const signals = analyzePriceHistory(order.seedHistory(now)[product.productId], product.priceCents, now);
+      const { fakeSale, minDropPct } = order.seedExpectation;
+
+      const problems: string[] = [];
+      if (signals.fakeSale.detected !== fakeSale) {
+        problems.push(`fakeSale.detected is ${signals.fakeSale.detected}, expected ${fakeSale}`);
+      }
+      if (minDropPct !== undefined) {
+        if (signals.pctVsBaseline === null || signals.pctVsBaseline > -minDropPct) {
+          problems.push(`drop vs baseline is ${signals.pctVsBaseline}, expected at least -${minDropPct}`);
+        }
+        if (signals.lowest30dCents !== product.priceCents) {
+          problems.push(`current price is not the 30-day low (${signals.lowest30dCents})`);
+        }
+      }
+      if (problems.length > 0) {
+        throw new Error(`the seeded history for "${order.rawIntent}" is wrong: ${problems.join("; ")}`);
+      }
+
+      await client.query(
+        `INSERT INTO candidates
+           (order_id, channel3_product_id, merchant, title, url, price_cents, fit_score, fit_reasoning, must_haves, seen_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          order.id,
+          product.productId,
+          product.merchant,
+          product.title,
+          product.url,
+          product.priceCents,
+          score.fitScore,
+          score.reasoning,
+          JSON.stringify(score.mustHaves),
+          now,
+        ],
+      );
     }
-    await client.query(
-      `INSERT INTO candidates
-         (order_id, channel3_product_id, merchant, title, url, price_cents, fit_score, fit_reasoning, must_haves, seen_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [
-        FAKE_SALE_ORDER.id,
-        product.productId,
-        product.merchant,
-        product.title,
-        product.url,
-        product.priceCents,
-        score.fitScore,
-        score.reasoning,
-        JSON.stringify(score.mustHaves),
-        now,
-      ],
-    );
 
     await client.query("COMMIT");
     console.log(`seeded ${FIXTURE_ORDERS.length} orders for ${DEMO_USER.email}`);
