@@ -83,6 +83,13 @@ Every tick also records the price Channel3 returns for each product it saw into 
 
 Cancelling an order also blocks its outstanding approval links: capturing one answers 409 and rejects the approval.
 
+## The app
+
+- `/` landing; `/orders` your orders with status and latest decision; `/orders/new` create one (you confirm the parsed restatement before it is watched).
+- `/orders/[id]` the parsed spec, current candidate, every decision (with the guardrail changes spelled out), any open approval, purchases, and **Check now** / Pause / Cancel. Check now runs one live cycle immediately (`POST /api/orders/[id]/check`; needs `ANTHROPIC_API_KEY` and `CHANNEL3_API_KEY`, answers 503 without them).
+- `/approvals/[token]` is where PayPal returns the buyer after they approve; it captures the payment and shows the confirmation.
+- Orders belong to `DEMO_USER_ID`; there is no sign-in yet.
+
 ## Tests
 
 ```sh
