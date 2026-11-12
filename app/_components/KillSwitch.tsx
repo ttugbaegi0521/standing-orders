@@ -41,17 +41,17 @@ export function KillSwitch({ on }: { on: boolean }) {
         aria-label="Kill switch"
         disabled={busy}
         onClick={flip}
-        className={`inline-flex items-center gap-3 rounded-md border py-1.5 pl-3.5 pr-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-60 ${
-          on ? "border-neg-line bg-neg-wash text-neg" : "border-rule-strong text-ink hover:bg-sunk"
+        className={`inline-flex items-center gap-3 rounded-md border py-1.5 pl-3 pr-1.5 text-sm font-medium shadow-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-60 ${
+          on ? "border-neg-line bg-neg-wash text-neg" : "border-rule-strong bg-surface text-ink hover:bg-sunk"
         }`}
       >
         <span>Kill switch {busy ? "…" : on ? "on" : "off"}</span>
         <span
           aria-hidden
-          className={`relative h-6 w-11 rounded-full transition-colors ${on ? "bg-neg" : "bg-rule-strong"}`}
+          className={`relative h-5 w-9 rounded-full transition-colors ${on ? "bg-neg" : "bg-rule-strong"}`}
         >
           <span
-            className={`absolute top-0.5 h-5 w-5 rounded-full bg-surface shadow-sm transition-all ${on ? "left-[1.375rem]" : "left-0.5"}`}
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow-sm transition-all ${on ? "left-[1.125rem]" : "left-0.5"}`}
           />
         </span>
       </button>

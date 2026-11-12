@@ -72,16 +72,16 @@ export function NewOrderForm() {
 
   if (created?.spec) {
     return (
-      <div className="max-w-xl">
+      <div className="max-w-xl rounded-lg border border-rule bg-panel p-6">
         <p className="type-eyebrow text-muted">Here is what I understood</p>
-        <blockquote className="mt-4 border-l-2 border-accent pl-5 font-serif text-2xl leading-snug">
+        <blockquote className="mt-3 border-l-2 border-accent pl-4 text-xl font-semibold leading-snug tracking-tight">
           {created.spec.restatement}
         </blockquote>
-        <p className="mt-5 text-sm text-muted">
+        <p className="mt-4 text-sm text-muted">
           If that is right, the order is live and will be checked on the next watch cycle. If not, cancel it and
           rephrase.
         </p>
-        <div className="mt-7 flex flex-wrap gap-3">
+        <div className="mt-6 flex flex-wrap gap-2 border-t border-rule pt-5">
           <button type="button" className={buttonPrimary} onClick={() => router.push(`/orders/${created.id}`)}>
             That is right — open the order
           </button>
@@ -110,9 +110,9 @@ export function NewOrderForm() {
   }
 
   return (
-    <form onSubmit={submit} className="max-w-xl space-y-8" noValidate>
+    <form onSubmit={submit} className="max-w-xl space-y-6 rounded-lg border border-rule bg-panel p-6" noValidate>
       <div>
-        <label htmlFor="intent" className="block font-serif text-xl">
+        <label htmlFor="intent" className="block text-sm font-semibold">
           What do you want, and your max price?
         </label>
         <textarea
@@ -121,49 +121,49 @@ export function NewOrderForm() {
           value={intent}
           onChange={(e) => setIntent(e.target.value)}
           placeholder="A good 27-inch IPS monitor for coding, under $300, free returns"
-          className={`${fieldClass} mt-3 resize-y`}
+          className={`${fieldClass} mt-2 resize-y`}
           maxLength={1000}
         />
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="perOrder" className="block text-sm font-medium">
+          <label htmlFor="perOrder" className="block text-sm font-semibold">
             Most to spend on one purchase
           </label>
           <div className="relative mt-2">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-faint">$</span>
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-sm text-muted">$</span>
             <input
               id="perOrder"
               inputMode="decimal"
               value={perOrder}
               onChange={(e) => setPerOrder(e.target.value)}
               placeholder="300"
-              className={`${fieldClass} pl-8 font-mono`}
+              className={`${fieldClass} pl-7 font-mono`}
             />
           </div>
         </div>
         <div>
-          <label htmlFor="monthly" className="block text-sm font-medium">
+          <label htmlFor="monthly" className="block text-sm font-semibold">
             Most to spend per month
           </label>
           <div className="relative mt-2">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-faint">$</span>
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-sm text-muted">$</span>
             <input
               id="monthly"
               inputMode="decimal"
               value={monthly}
               onChange={(e) => setMonthly(e.target.value)}
               placeholder="600"
-              className={`${fieldClass} pl-8 font-mono`}
+              className={`${fieldClass} pl-7 font-mono`}
             />
           </div>
         </div>
       </div>
 
       <div>
-        <label htmlFor="merchants" className="block text-sm font-medium">
-          Merchants you trust <span className="font-normal text-faint">(optional, comma-separated)</span>
+        <label htmlFor="merchants" className="block text-sm font-semibold">
+          Merchants you trust <span className="font-normal text-muted">(optional, comma-separated)</span>
         </label>
         <input
           id="merchants"
@@ -172,16 +172,16 @@ export function NewOrderForm() {
           placeholder="bestbuy.com, amazon.com"
           className={`${fieldClass} mt-2`}
         />
-        <p className="mt-2 text-sm text-muted">Purchases from anywhere else always wait for your approval.</p>
+        <p className="mt-1.5 text-xs text-muted">Purchases from anywhere else always wait for your approval.</p>
       </div>
 
       {error && <Notice tone="red">{error}</Notice>}
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 border-t border-rule pt-5">
         <button type="submit" disabled={busy} className={buttonPrimary}>
           {busy ? "Reading your request…" : "Create standing order"}
         </button>
-        <Link href="/orders" className="text-sm text-muted hover:text-ink">
+        <Link href="/orders" className="text-sm font-medium text-muted hover:text-ink">
           Cancel
         </Link>
       </div>

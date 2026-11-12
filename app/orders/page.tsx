@@ -6,7 +6,7 @@ import { demoUserId, getKillSwitch, getOrderStore, type OrderSummary } from "@/l
 import { KillSwitch } from "../_components/KillSwitch";
 import { LocalTime } from "../_components/LocalTime";
 import { dollars } from "../_components/format";
-import { ActionPill, Mono, Notice, OrderStatusPill, Shell, buttonPrimary } from "../_components/ui";
+import { ActionPill, Mono, Notice, OrderStatusPill, PageHeader, Shell, buttonPrimary } from "../_components/ui";
 
 async function load(): Promise<{ orders: OrderSummary[]; problem: string | null }> {
   const userId = demoUserId();
@@ -59,7 +59,7 @@ async function KillSwitchBanner() {
   await connection();
   if (!(await killSwitchState())) return null;
   return (
-    <div role="alert" className="mb-8 rounded-sm bg-neg px-5 py-4 text-base font-medium text-paper">
+    <div role="alert" className="mb-6 rounded-lg bg-neg px-5 py-3.5 text-[0.9375rem] font-medium text-paper">
       Agent paused — kill switch on. No purchases will be made.
     </div>
   );
@@ -78,18 +78,20 @@ export default function OrdersPage() {
       <Suspense fallback={null}>
         <KillSwitchBanner />
       </Suspense>
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-        <h1 className="type-title">Your standing orders</h1>
-        <div className="flex flex-wrap items-center gap-3">
-          <Suspense fallback={null}>
-            <KillSwitchControl />
-          </Suspense>
-          <Link href="/orders/new" className={`${buttonPrimary} shrink-0`}>
-            New standing order
-          </Link>
-        </div>
-      </div>
-      <Suspense fallback={<p className="mt-10 text-faint">Loading your orders…</p>}>
+      <PageHeader
+        title="Your standing orders"
+        actions={
+          <>
+            <Suspense fallback={null}>
+              <KillSwitchControl />
+            </Suspense>
+            <Link href="/orders/new" className={`${buttonPrimary} shrink-0`}>
+              New standing order
+            </Link>
+          </>
+        }
+      />
+      <Suspense fallback={<p className="text-sm text-muted">Loading your orders…</p>}>
         <OrdersList />
       </Suspense>
     </Shell>
@@ -104,15 +106,13 @@ async function OrdersList() {
   return (
     <>
       {problem && (
-        <div className="mt-8">
-          <Notice tone="red">{problem}</Notice>
-        </div>
+        <Notice tone="red">{problem}</Notice>
       )}
 
       {!problem && orders.length === 0 && (
-        <div className="mt-16 max-w-md">
-          <p className="font-serif text-2xl">Nothing is being watched yet.</p>
-          <p className="mt-3 text-muted">
+        <div className="rounded-lg border border-dashed border-rule-strong bg-panel px-6 py-12 text-center">
+          <p className="type-heading">Nothing is being watched yet.</p>
+          <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted">
             Describe something you want to buy and the most you will pay. The agent takes it from there.
           </p>
           <Link href="/orders/new" className={`${buttonPrimary} mt-6`}>
@@ -122,45 +122,49 @@ async function OrdersList() {
       )}
 
       {orders.length > 0 && (
-        <div className="mt-8">
-          <p className="mb-6 text-sm text-muted">{counts(orders)}</p>
-          <div className="hidden grid-cols-[1fr_6.5rem_7.5rem_7.5rem] gap-x-6 border-b border-rule pb-2 type-eyebrow text-muted sm:grid">
-            <span>Order</span>
-            <span>Max price</span>
-            <span>Status</span>
-            <span>Last decision</span>
-          </div>
-          <ul>
-            {orders.map((o) => {
-              const muted = MUTED.has(o.status);
-              return (
-                <li key={o.id} className="border-b border-rule">
-                  <Link
-                    href={`/orders/${o.id}`}
-                    className={`grid items-center gap-x-6 gap-y-3 py-5 sm:grid-cols-[1fr_6.5rem_7.5rem_7.5rem] ${
-                      muted ? "text-faint" : "transition-colors hover:bg-sunk"
-                    }`}
-                  >
-                    <span>
-                      <span className="line-clamp-2 font-serif text-lg leading-snug">{o.raw_intent}</span>
-                      <span className="mt-1 block text-xs text-faint">
-                        Created <LocalTime iso={o.created_at} mode="relative" />
+        <div>
+          <p className="mb-3 text-sm text-muted">{counts(orders)}</p>
+          <div className="overflow-hidden rounded-lg border border-rule bg-surface">
+            <div className="hidden grid-cols-[1fr_6.5rem_7.5rem_7.5rem] gap-x-6 border-b border-rule bg-panel px-5 py-2.5 type-eyebrow text-muted sm:grid">
+              <span>Order</span>
+              <span>Max price</span>
+              <span>Status</span>
+              <span>Last decision</span>
+            </div>
+            <ul>
+              {orders.map((o) => {
+                const muted = MUTED.has(o.status);
+                return (
+                  <li key={o.id} className="border-t border-rule first:border-t-0">
+                    <Link
+                      href={`/orders/${o.id}`}
+                      className={`grid items-center gap-x-6 gap-y-2.5 px-5 py-4 transition-colors hover:bg-panel focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent sm:grid-cols-[1fr_6.5rem_7.5rem_7.5rem] ${
+                        muted ? "text-muted" : ""
+                      }`}
+                    >
+                      <span>
+                        <span className={`line-clamp-2 text-[0.9375rem] font-medium leading-snug ${muted ? "" : "text-ink"}`}>
+                          {o.raw_intent}
+                        </span>
+                        <span className="mt-1 block text-xs text-muted">
+                          Created <LocalTime iso={o.created_at} mode="relative" />
+                        </span>
                       </span>
-                    </span>
-                    <span>
-                      <Mono>{dollars(o.max_price_cents)}</Mono>
-                    </span>
-                    <span>
-                      <OrderStatusPill status={o.status} />
-                    </span>
-                    <span>
-                      <ActionPill action={o.latest_action} />
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                      <span>
+                        <Mono className="text-sm">{dollars(o.max_price_cents)}</Mono>
+                      </span>
+                      <span>
+                        <OrderStatusPill status={o.status} />
+                      </span>
+                      <span>
+                        <ActionPill action={o.latest_action} />
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </div>
       )}
     </>

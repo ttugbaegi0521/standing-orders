@@ -39,7 +39,7 @@ export function FinalizeApproval({ token }: { token: string }) {
     return (
       <div role="status" className="flex items-center gap-3">
         <span aria-hidden className="h-2.5 w-2.5 animate-pulse rounded-full bg-accent" />
-        <p className="font-serif text-xl">Finalizing…</p>
+        <p className="text-base font-semibold">Finalizing…</p>
       </div>
     );
   }
