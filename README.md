@@ -8,11 +8,34 @@ Best Use of Agentic Commerce, Best Use of Channel3, Best Use of Render, and Most
 
 ## How it works
 
-Each standing order runs as its own Render Workflow through five steps: parse intent, search and score, decide,
-guardrails, and execute. The LLM proposes (it turns the request into a spec, scores candidates, and picks
+Each standing order goes through five steps: parse intent, search and score, decide, guardrails, and execute.
+The request is parsed once, when the order is created; after that every check is one cycle of the other four
+steps (`runOrderCycle`). Scheduling is a Render cron job that POSTs `/api/tick` every 15 minutes; the tick selects
+the active orders that are due and advances each by one cycle. The LLM proposes (it turns the request into a spec, scores candidates, and picks
 fill / hold / ask / skip); plain code enforces the guardrails (caps, merchant allowlist, kill switch) and is the only
-thing that ever calls PayPal. There are two checkout tiers: our agent-ready sandbox store is captured automatically
-with the user's PayPal Vault payment method, and every other merchant gets a one-tap approval link instead.
+thing that ever calls PayPal. There are two checkout tiers in the code: an agent-ready merchant is captured
+automatically with the user's PayPal Vault payment method, and every other merchant gets a one-tap approval link.
+The demo uses approval links throughout.
+
+## Where each technology is used
+
+- **PayPal.** Orders API create and capture, all in `lib/paypal.ts` (the only file that calls PayPal), against the
+  sandbox with real captures. Purchases go through the tier-2 one-tap approval flow: the agent creates the PayPal
+  order, the buyer approves it on PayPal, and `/approvals/[token]` captures it. `/store` is our own sandbox merchant
+  with PayPal checkout. Captures are confirmed by a verified webhook (`/api/webhooks/paypal`).
+- **Claude (AI).** Three steps, each through the Vercel AI SDK with a zod-validated structured output:
+  `parse-intent.ts` turns free text into a spec, `search-and-score.ts` scores each candidate for fit, and `decide.ts`
+  picks fill / hold / skip / ask with written reasoning, including the fake-sale refusal. Every live call is
+  audit-logged to `llm_calls`. Claude never calls PayPal.
+- **Channel3.** Live product search in `lib/channel3.ts` (the only file that calls Channel3). Its results are the
+  real candidates that get scored, and each price it returns is recorded to build price history.
+- **Render.** A Blueprint (`render.yaml`) with the web service, Postgres, and a cron job. The cron job POSTs
+  `/api/tick` every 15 minutes, and that is what makes orders "standing" in production.
+
+What is demo-only: the fake-sale refusal in the demo relies on seeded price history, because Channel3 returns no
+history and detection needs a baseline older than 14 days; a live product can only be flagged after about two weeks
+of recorded prices. The automatic tier-1 path (capture with a PayPal Vault payment method, no approval) is
+implemented and tested against fakes, but the demo uses approval links because Vault setup is blocked in our sandbox.
 
 ## Run locally
 
@@ -35,13 +58,15 @@ npm run dev
 - `workflows/standing-order/steps/decide.ts` — LLM: fill / hold / ask / skip
 - `workflows/standing-order/steps/guardrails.ts` — plain code: caps, allowlist, kill switch; can only make a decision more cautious
 - `workflows/standing-order/steps/execute.ts` — the only step that calls PayPal; handles tier 1 and tier 2
-- `workflows/standing-order/run-cycle.ts` — in-memory chaining of steps 2–5
+- `workflows/standing-order/run-order.ts` — the persisted cycle for one order (`runOrderCycle`) and the tick that runs every due order (`tickOnce`)
+- `workflows/standing-order/run-cycle.ts` — in-memory chaining of steps 2–5, used by the fixture tests
+- `app/api/tick/route.ts`, `render.yaml` — the endpoint the Render cron job calls, and the Blueprint that defines it
 - `workflows/standing-order/price-signals.ts` — fake-sale detection
 - `lib/paypal.ts`, `lib/channel3.ts` — the only places those APIs are called
 - `db/migrations/0001_init.sql` — schema
 - `fixtures/demo.ts`, `fixtures/fakes.ts` — demo orders and fake clients
 
-## Demo: full workflow
+## Demo: the full cycle from the command line
 
 ```sh
 npm run db:migrate && npm run db:seed
@@ -124,7 +149,7 @@ Cancelling an order also blocks its outstanding approval links: capturing one an
 **The cron job is what makes orders "standing" in production.** Nothing inside the app schedules itself: every 15
 minutes Render calls `/api/tick`, which checks every due active order (Channel3 search, Claude scoring and decision,
 guardrails, PayPal). That scheduled loop, the web service and the database are the whole of this project's use of
-Render; it does not use Render Workflows.
+Render.
 
 Steps:
 

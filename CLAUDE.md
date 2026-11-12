@@ -18,7 +18,7 @@ list price was inflated last week). The refusal is what makes judges trust it.
 
 - Next.js (App Router, TypeScript) — UI + API routes, deployed on Render
 - Postgres on Render
-- Render Workflows — one long-running workflow per standing order
+- Render Blueprint (`render.yaml`) — web service, Postgres, and a cron job that POSTs `/api/tick` every 15 minutes
 - PayPal sandbox via the PayPal Agent Toolkit (TypeScript) / REST: Orders, Vault (saved payment method), capture
 - Channel3 API — product search and prices
 - Claude via Vercel AI SDK (structured output + tool use) for steps 1–3 below
@@ -26,10 +26,14 @@ list price was inflated last week). The refusal is what makes judges trust it.
 
 ## Architecture
 
-Trust flows one way: humans act in the Next.js app; the model proposes inside the workflow; plain code enforces
+Trust flows one way: humans act in the Next.js app; the model proposes inside the cycle; plain code enforces
 guardrails and is the only thing that touches PayPal.
 
-Workflow steps (one Render Workflow instance per order, steps idempotent, `fills` row is the lock):
+Scheduling: the Render cron job calls `POST /api/tick`, which claims every due `active` order and runs one cycle
+for each (`runOrderCycle` in `workflows/standing-order/run-order.ts`). Step 1 runs once, when the order is created;
+a cycle is steps 2–5.
+
+Steps (idempotent, `fills` row is the lock):
 
 1. **Parse intent** (LLM, structured output) → spec JSON: category, must-haves, nice-to-haves, max price, constraints,
    plain-English restatement for the user to confirm.
@@ -37,7 +41,7 @@ Workflow steps (one Render Workflow instance per order, steps idempotent, `fills
    which must-haves pass/fail, one-line reasoning. Code filters below threshold.
 3. **Decide** (LLM) → one of `fill | hold | ask | skip` with reasoning, given top candidate, price history, today's date
    and upcoming sale events (Black Friday is Nov 27, 2026), user caps and allowlist.
-   - hold: likely to drop further → sleep, re-run from step 2
+   - hold: likely to drop further → schedule the next check (`next_check_at`), re-run from step 2 on a later tick
    - skip: fake sale (list price raised recently) or spec no longer met
    - ask: fits but exceeds a cap or merchant not allowlisted → approval push
 4. **Guardrails** (code only, no model) → per-order cap, monthly cap, allowlist, kill switch. Runs after the model's
@@ -46,7 +50,7 @@ Workflow steps (one Render Workflow instance per order, steps idempotent, `fills
    - Tier 1 (merchant is our own agent-ready sandbox store): create PayPal order with the user's vaulted payment
      method, capture, write `fills`.
    - Tier 2 (any other merchant): create PayPal order, write `approvals` row, email/push a one-tap approval link.
-     `POST /approvals/:token` captures and resumes the workflow.
+     `POST /approvals/:token` captures and marks the order filled.
    - Always write a `decisions` row and send the user a two-sentence explanation.
 
 The LLM never calls PayPal. Price polling, Channel3 queries, and order creation are ordinary functions.
@@ -55,7 +59,7 @@ The LLM never calls PayPal. Price polling, Channel3 queries, and order creation 
 
 - `users` — id, email, encrypted PayPal vault token (never put in LLM context)
 - `standing_orders` — user_id, raw_intent, spec (jsonb), max_price, per_order_cap, monthly_cap, merchant_allowlist (text[]),
-  status (`active|filled|paused|cancelled`), workflow_id
+  status (`active|needs_review|filled|paused|cancelled`), next_check_at (`workflow_id` exists but is unused)
 - `candidates` — order_id, channel3_product_id, merchant, price, fit_score, fit_reasoning, seen_at
 - `price_points` — product_id, price, observed_at (powers fake-sale detection and timing)
 - `decisions` — order_id, action, reasoning, llm_input_hash, created_at (audit trail)
@@ -64,17 +68,19 @@ The LLM never calls PayPal. Price polling, Channel3 queries, and order creation 
 
 ## API routes
 
-- `POST /api/orders` — create row, start workflow
+- `POST /api/orders` — create row, parse the intent into a spec
+- `POST /api/orders/:id/check` — run one cycle now
+- `POST /api/tick` — run one cycle for every due active order (called by the Render cron job)
 - `GET /api/orders/:id` — status, candidates, decisions
 - `POST /api/orders/:id/pause`, `POST /api/orders/:id/cancel`
 - `POST /api/approvals/:token` — tier-2 capture + resume
 - `POST /api/webhooks/paypal` — capture confirmations
-- `POST /api/admin/price-override` — **demo only**: inject a fake price for a product id into the loop
+- `POST /api/admin/price-override` — **not implemented** (answers 501); the demo uses seeded price history instead
 
 ## Demo controls
 
-Channel3 prices won't move on command. Keep real Channel3 data for search/display; use the price override to trigger a
-fill. Seed two orders: one that fills, one that is refused as a fake sale (seed `price_points` with an inflated
+Channel3 prices won't move on command. Keep real Channel3 data for search/display; the fill is driven by seeded price
+history and `npm run demo-run` (the price override route is not implemented). Seed two orders: one that fills, one that is refused as a fake sale (seed `price_points` with an inflated
 list price from last week). Fixture-test steps 2 and 3 so the refusal is deterministic.
 
 ## Build order (Nov 5 → Nov 12)
@@ -83,10 +89,10 @@ list price from last week). Fixture-test steps 2 and 3 so the refusal is determi
 - Fri: Channel3 search returning real products; sandbox store (one page, 3 products) with PayPal order create +
   capture working by hand; DB schema + migrations.
 - Sat: step 1 (intent → spec), step 2 scoring, step 3/4 decision engine with caps and allowlist; fixture tests.
-- Sun: Render Workflow running steps 1–5 end to end with price override; Vault setup; first agent-driven sandbox fill.
+- Sun: tick loop running steps 1–5 end to end; Vault setup; first agent-driven sandbox fill.
 - Mon: tier-2 approval links; fake-sale and "wait for Black Friday" logic; decision log in the UI.
 - Tue: UI polish, seed demo data, rough demo video.
-- Wed: final video (<3 min: place order → workflow graph → price change → fill in PayPal → refused order → reasoning),
+- Wed: final video (<3 min: place order → pipeline strip → fill in PayPal → refused order → reasoning),
   Devpost writeup, deploy to Render, test live URL from a clean browser.
 - Thu AM: submit by noon. No code changes after.
 
@@ -100,9 +106,9 @@ list price from last week). Fixture-test steps 2 and 3 so the refusal is determi
 
 ## Submission checklist
 
-- Public repo; README names exactly where PayPal, Claude, Channel3, and Render Workflows are used
+- Public repo; README names exactly where PayPal, Claude, Channel3, and Render are used
 - Live Render URL
-- Video shows a fill, a refusal, and the workflow graph
+- Video shows a fill, a refusal, and the pipeline strip on the order page
 - Devpost text explicitly tags Agentic Commerce, Channel3, Render
 
 ## Commands
@@ -119,5 +125,5 @@ list price from last week). Fixture-test steps 2 and 3 so the refusal is determi
 
 - TypeScript strict; zod schemas for every LLM output and every API body
 - Every PayPal call goes through `lib/paypal.ts`; every Channel3 call through `lib/channel3.ts`
-- Workflow steps in `workflows/standing-order/steps/*.ts`, one file per step, pure where possible
+- Cycle steps in `workflows/standing-order/steps/*.ts`, one file per step, pure where possible
 - Log every LLM call (input hash, output) to `decisions` or a `llm_calls` table — judges will ask for the audit trail
