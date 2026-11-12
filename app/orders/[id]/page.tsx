@@ -8,6 +8,7 @@ import { getPriceHistory } from "@/lib/price-history";
 import type { PricePoint } from "@/lib/schemas";
 import { CheckNowButton } from "../../_components/CheckNowButton";
 import { LocalTime } from "../../_components/LocalTime";
+import { PipelineStrip } from "../../_components/PipelineStrip";
 import { PriceChart } from "../../_components/PriceChart";
 import { dollars } from "../../_components/format";
 import { OrderActions } from "../../_components/order-actions";
@@ -243,6 +244,17 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
           </Notice>
         </div>
       )}
+
+      <section className="mb-10">
+        <SectionTitle>Latest agent cycle</SectionTitle>
+        <PipelineStrip
+          hasSpec={spec !== null}
+          consideredCount={Math.max(detail.considered.length, candidate ? 1 : 0)}
+          decision={decisions[0] ?? null}
+          filled={order.status === "filled" || fills.some((f) => f.status === "captured")}
+          approvalOpen={approvals.length > 0}
+        />
+      </section>
 
       <div className="mb-14 flex flex-wrap items-center gap-3">
         <CheckNowButton orderId={order.id} disabled={order.status !== "active" && order.status !== "needs_review"} />
