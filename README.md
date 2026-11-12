@@ -66,7 +66,7 @@ curl -X POST http://localhost:3000/api/orders/<id>/pause
 curl -X POST http://localhost:3000/api/orders/<id>/cancel
 ```
 
-Statuses: `active`, `needs_review`, `paused`, `filled`, `cancelled`. Only `active` orders may be advanced by a cycle run (`RUNNABLE_STATUSES` in `lib/orders.ts`), so paused, cancelled, filled and needs-review orders are skipped by the future tick loop. A captured tier-2 approval sets the order to `filled`. Nothing runs cycles on a schedule yet; `npm run workflow:smoke` is still the only driver.
+Statuses: `active`, `needs_review`, `paused`, `filled`, `cancelled`. Only `active` orders may be advanced by a cycle run (`RUNNABLE_STATUSES` in `lib/orders.ts`), so paused, cancelled, filled and needs-review orders are skipped by the tick loop. A captured tier-2 approval sets the order to `filled`. Cycles run on a schedule through the watch loop (`POST /api/tick`), which a Render cron job calls every 15 minutes in production (see Deploy on Render).
 
 ## Kill switch
 
@@ -97,7 +97,7 @@ npm run tick                                    # one tick, pretty-printed
 curl -X POST http://localhost:3000/api/tick     # the same, as JSON: { checked, results }
 ```
 
-Run one of these on a schedule (for example a Render cron job); nothing schedules itself. Unlike `workflow:smoke`, the loop is always live and needs `ANTHROPIC_API_KEY` and `CHANNEL3_API_KEY` (the endpoint answers 503 without them instead of using fixtures), plus PayPal credentials. Set `TICK_SECRET` to require `Authorization: Bearer <secret>`; without it anyone who can reach the endpoint can trigger live calls.
+Run one of these on a schedule; nothing inside the app schedules itself. In production the Render cron job in `render.yaml` does it every 15 minutes (see Deploy on Render). Unlike `workflow:smoke`, the loop is always live and needs `ANTHROPIC_API_KEY` and `CHANNEL3_API_KEY` (the endpoint answers 503 without them instead of using fixtures), plus PayPal credentials. Set `TICK_SECRET` to require `Authorization: Bearer <secret>`; without it anyone who can reach the endpoint can trigger live calls.
 
 Every tick also records the price Channel3 returns for each product it saw into `price_points` (skipping a product whose price is unchanged within the last hour), so history builds up for real products. Fake-sale detection reads that history, but it needs more than a few ticks: it compares a recent price peak (the last 14 days) with a baseline of at least 3 observations older than 14 days, so a live product needs roughly two weeks of history before it can be flagged. Until then the decide step sees no baseline and judges on the price alone.
 
@@ -111,13 +111,52 @@ Cancelling an order also blocks its outstanding approval links: capturing one an
 - Timestamps show in your own timezone (with a relative "2 hours ago" and the full time on hover); the first paint shows UTC until the browser swaps in local time. The dashboard ranks watching orders first and mutes filled and cancelled ones, with a count line on top. The detail page charts the current candidate's price history against your max; it needs two or more recorded prices (one is recorded each time the agent checks), so a new order shows a quiet empty state until it has been checked a couple of times.
 - Orders belong to `DEMO_USER_ID`; there is no sign-in yet.
 
+## Deploy on Render
+
+`render.yaml` is a Render Blueprint with three resources:
+
+- `standing-orders-db`: Postgres.
+- `standing-orders`: the Next.js web service. It builds with `npm install --include=dev && npm run build` and starts
+  with `npm run db:migrate && npm run start`, so migrations are applied before it serves.
+- `standing-orders-tick`: a cron job that runs every 15 minutes (`*/15 * * * *`) and POSTs `/api/tick` on the web
+  service with the tick secret.
+
+**The cron job is what makes orders "standing" in production.** Nothing inside the app schedules itself: every 15
+minutes Render calls `/api/tick`, which checks every due active order (Channel3 search, Claude scoring and decision,
+guardrails, PayPal). That scheduled loop, the web service and the database are the whole of this project's use of
+Render; it does not use Render Workflows.
+
+Steps:
+
+1. In the Render dashboard choose **New → Blueprint** and connect this repo. Render reads `render.yaml`.
+2. Fill in the secrets it asks for: `ANTHROPIC_API_KEY`, `CHANNEL3_API_KEY`, `PAYPAL_CLIENT_ID`,
+   `PAYPAL_CLIENT_SECRET`, `PAYPAL_API_BASE` (`https://api-m.sandbox.paypal.com`), `VAULT_ENCRYPTION_KEY`
+   (`openssl rand -base64 32`), `DEMO_USER_ID` (`00000000-0000-4000-8000-000000000001`, the seeded demo user),
+   `AGENT_READY_MERCHANTS` (empty for approval links everywhere), and `TICK_SECRET`. Use the same `TICK_SECRET` on
+   the web service and the cron job. `DATABASE_URL` is wired to the database automatically.
+3. After the first deploy, copy the web service's URL (for example `https://standing-orders.onrender.com`) into
+   `APP_BASE_URL` and `STORE_BASE_URL` on the web service and `APP_URL` on the cron job, with no trailing slash, then
+   redeploy. PayPal return and cancel links are built from these, so until they are set, approvals return to the
+   wrong host.
+4. In the PayPal developer dashboard, point the sandbox app's webhook at `https://<your-host>/api/webhooks/paypal`
+   and put its webhook id in `PAYPAL_WEBHOOK_ID`. If you registered return URLs for the sandbox app, change them to
+   the Render host too.
+5. Seed the demo data once with `npm run db:seed`, either from the web service's Shell tab or locally with
+   `DATABASE_URL` set to the database's external connection string. Do not add it to the start command: reseeding
+   resets the demo orders' decisions, fills and price points.
+6. Check the loop: trigger the cron job once from the dashboard (**Trigger Run**). A non-2xx answer from `/api/tick`
+   (401 for a wrong secret, 503 for missing API keys) fails the run, and the log shows why.
+
+The cron job needs a paid instance type (Render has no free cron jobs); the web service and database are set to the
+free plan, where the web service sleeps when idle and wakes on the next request, including the cron job's.
+
 ## Tests
 
 ```sh
 npm test
 ```
 
-25/25 passing. The refusal case (a fake sale where the list price was inflated last week) is covered end to end on
+106 passing. The refusal case (a fake sale where the list price was inflated last week) is covered end to end on
 fixture data, with no network calls.
 
 ## Status
