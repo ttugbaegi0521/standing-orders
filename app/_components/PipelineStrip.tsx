@@ -32,11 +32,11 @@ interface Stage {
   hint?: string;
 }
 
-const GREEN = "text-emerald-800";
-const RED = "text-red-800";
-const AMBER = "text-amber-800";
-const BLUE = "text-[#2748d4]";
-const MUTED = "text-[#a3a199]";
+const GREEN = "text-pos";
+const RED = "text-neg";
+const AMBER = "text-warn";
+const BLUE = "text-accent";
+const MUTED = "text-faint";
 
 function buildStages({ hasSpec, consideredCount, decision, filled, approvalOpen }: Props): Stage[] {
   const blocked = decision?.guardrail_reasons.includes(KILL_SWITCH_REASON) ?? false;
@@ -68,7 +68,7 @@ function buildStages({ hasSpec, consideredCount, decision, filled, approvalOpen 
     if (blocked) execute = <span className={RED}>blocked</span>;
     else if (filled) execute = <span className={GREEN}>filled</span>;
     else if (approvalOpen) execute = <span className={BLUE}>approval requested</span>;
-    else execute = <span className="text-[#6b6a64]">no action</span>;
+    else execute = <span className="text-muted">no action</span>;
   }
 
   return [
@@ -86,7 +86,7 @@ function buildStages({ hasSpec, consideredCount, decision, filled, approvalOpen 
     {
       label: "Search",
       state: state(1, consideredCount > 0),
-      status: consideredCount > 0 ? <span className="text-[#3a3935]">{consideredCount} via Channel3</span> : notRun,
+      status: consideredCount > 0 ? <span className="text-ink-2">{consideredCount} via Channel3</span> : notRun,
     },
     {
       label: "Decide",
@@ -108,14 +108,14 @@ function buildStages({ hasSpec, consideredCount, decision, filled, approvalOpen 
 }
 
 const RULE: Record<State, string> = {
-  active: "border-[#2748d4]",
-  done: "border-[#c9c7bf]",
-  pending: "border-[#e7e5df]",
+  active: "border-accent",
+  done: "border-rule-strong",
+  pending: "border-rule",
 };
 const LABEL: Record<State, string> = {
-  active: "text-[#2748d4]",
-  done: "text-[#1c1b19]",
-  pending: "text-[#a3a199]",
+  active: "text-accent",
+  done: "text-ink",
+  pending: "text-faint",
 };
 
 export function PipelineStrip(props: Props) {
@@ -135,7 +135,7 @@ export function PipelineStrip(props: Props) {
           </p>
           <p className="min-w-0 text-right text-sm sm:mt-2 sm:text-left">{s.status}</p>
           {i < stages.length - 1 && (
-            <span aria-hidden className="absolute right-1.5 top-3 hidden text-sm leading-none text-[#a3a199] sm:block">
+            <span aria-hidden className="absolute right-1.5 top-3 hidden text-sm leading-none text-faint sm:block">
               →
             </span>
           )}

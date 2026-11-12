@@ -13,8 +13,6 @@ const W = 600;
 const H = 168;
 const PAD_X = 8;
 const PAD_Y = 14;
-const INK = "#1c1b19";
-const ACCENT = "#2748d4";
 
 export function PriceChart({ points, maxPriceCents }: { points: Point[]; maxPriceCents: number | null }) {
   const pts = points
@@ -26,7 +24,7 @@ export function PriceChart({ points, maxPriceCents }: { points: Point[]; maxPric
 
   if (pts.length < 2 || t0 === t1) {
     return (
-      <p className="max-w-prose text-[#6b6a64]">
+      <p className="max-w-prose text-muted">
         No price history yet — the agent records the price each time it checks. Run a few checks to see the trend.
       </p>
     );
@@ -64,16 +62,16 @@ export function PriceChart({ points, maxPriceCents }: { points: Point[]; maxPric
 
   return (
     <figure>
-      <dl className="mb-4 flex flex-wrap gap-x-8 gap-y-2 text-sm">
+      <dl className="mb-6 flex flex-wrap gap-x-10 gap-y-4">
         {[
           ["Low", low],
           ["High", high],
           ["Latest", latest],
         ].map(([label, value]) => (
-          <div key={label as string} className="flex items-baseline gap-2">
-            <dt className="text-[#6b6a64]">{label}</dt>
+          <div key={label as string} className="flex flex-col gap-2">
+            <dt className="type-eyebrow text-muted">{label}</dt>
             <dd>
-              <Mono className={label === "Latest" ? "font-medium" : ""}>{dollars(value as number)}</Mono>
+              <Mono className={label === "Latest" ? "text-xl font-medium text-accent" : "text-xl"}>{dollars(value as number)}</Mono>
             </dd>
           </div>
         ))}
@@ -93,30 +91,30 @@ export function PriceChart({ points, maxPriceCents }: { points: Point[]; maxPric
             y={y(maxPriceCents)}
             width={W}
             height={Math.max(0, H - y(maxPriceCents))}
-            fill={ACCENT}
-            fillOpacity={0.07}
+            className="fill-accent"
+            fillOpacity={0.06}
           />
         )}
-        <line x1={0} x2={W} y1={H - 0.5} y2={H - 0.5} stroke="#e7e5df" vectorEffect="non-scaling-stroke" />
+        <line x1={0} x2={W} y1={H - 0.5} y2={H - 0.5} className="stroke-rule-strong" vectorEffect="non-scaling-stroke" />
         {maxInView && (
           <line
             x1={0}
             x2={W}
             y1={y(maxPriceCents)}
             y2={y(maxPriceCents)}
-            stroke={INK}
+            className="stroke-ink"
             strokeOpacity={0.6}
             strokeDasharray="5 4"
             vectorEffect="non-scaling-stroke"
           />
         )}
-        <path d={line} fill="none" stroke={ACCENT} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <path d={line} fill="none" className="stroke-accent" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
         {pts.length <= 24 &&
-          pts.slice(0, -1).map((p) => <circle key={p.t} cx={x(p.t)} cy={y(p.v)} r={2.5} fill="#fbfaf7" stroke={ACCENT} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />)}
-        <circle cx={x(last.t)} cy={y(last.v)} r={5} fill={ACCENT} stroke="#fbfaf7" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+          pts.slice(0, -1).map((p) => <circle key={p.t} cx={x(p.t)} cy={y(p.v)} r={2.5} className="fill-paper stroke-accent" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />)}
+        <circle cx={x(last.t)} cy={y(last.v)} r={5} className="fill-accent stroke-paper" strokeWidth={2} vectorEffect="non-scaling-stroke" />
       </svg>
 
-      <div className="mt-2 flex justify-between text-xs text-[#6b6a64]">
+      <div className="mt-2 flex justify-between text-xs text-muted">
         <Mono>
           <LocalTime iso={new Date(t0).toISOString()} mode="date" />
         </Mono>
@@ -125,11 +123,11 @@ export function PriceChart({ points, maxPriceCents }: { points: Point[]; maxPric
         </Mono>
       </div>
 
-      <figcaption className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-[#6b6a64]">
+      <figcaption className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted">
         {maxPriceCents !== null && (
           <span className="inline-flex items-center gap-2">
             <svg width="22" height="6" aria-hidden>
-              <line x1="0" x2="22" y1="3" y2="3" stroke={INK} strokeOpacity={0.6} strokeDasharray="5 4" strokeWidth={1.5} />
+              <line x1="0" x2="22" y1="3" y2="3" className="stroke-ink" strokeOpacity={0.6} strokeDasharray="5 4" strokeWidth={1.5} />
             </svg>
             your max <Mono>{dollars(maxPriceCents)}</Mono>
             {!maxInView && " (far above these prices)"}

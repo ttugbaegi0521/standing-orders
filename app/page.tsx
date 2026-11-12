@@ -18,10 +18,10 @@ export default function Home() {
   return (
     <Shell>
       <section className="pt-6 sm:pt-12">
-        <h1 className="max-w-2xl font-serif text-4xl leading-[1.12] tracking-tight sm:text-5xl">
+        <h1 className="max-w-2xl type-display">
           Limit orders for shopping.
         </h1>
-        <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#3a3935]">
+        <p className="mt-5 max-w-xl text-lg leading-relaxed text-ink-2">
           Tell an agent what you want and your price. It watches the market, buys with PayPal when a real deal
           qualifies, and refuses the fake ones.
         </p>
@@ -35,29 +35,29 @@ export default function Home() {
         </div>
       </section>
 
-      <ol className="mt-20 grid gap-10 border-t border-[#e7e5df] pt-10 sm:grid-cols-3">
+      <ol className="mt-20 grid gap-10 border-t border-rule pt-10 sm:grid-cols-3">
         {STEPS.map(([title, body], i) => (
           <li key={title}>
-            <span className="font-mono text-sm text-[#2748d4]">{String(i + 1).padStart(2, "0")}</span>
+            <span className="font-mono text-sm text-accent">{String(i + 1).padStart(2, "0")}</span>
             <h2 className="mt-2 font-serif text-xl">{title}</h2>
-            <p className="mt-2 text-sm leading-relaxed text-[#6b6a64]">{body}</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{body}</p>
           </li>
         ))}
       </ol>
 
-      <section className="mt-16 border-t border-[#e7e5df] pt-10">
-        <h2 className="text-xs font-medium uppercase tracking-[0.14em] text-[#6b6a64]">How it’s built</h2>
+      <section className="mt-16 border-t border-rule pt-10">
+        <h2 className="type-eyebrow text-muted">How it’s built</h2>
         <dl className="mt-5 grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
           {STACK.map(([name, role]) => (
             <div key={name}>
-              <dt className="font-serif text-xl text-[#2748d4]">{name}</dt>
-              <dd className="mt-1 text-sm leading-relaxed text-[#6b6a64]">{role}</dd>
+              <dt className="type-heading">{name}</dt>
+              <dd className="mt-1 text-sm leading-relaxed text-muted">{role}</dd>
             </div>
           ))}
         </dl>
       </section>
 
-      <p className="mt-16 max-w-xl text-sm leading-relaxed text-[#6b6a64]">
+      <p className="mt-16 max-w-xl text-sm leading-relaxed text-muted">
         You set the limits: a cap per order, a monthly cap, the merchants you trust. Anything outside them comes
         back to you instead of being bought.
       </p>

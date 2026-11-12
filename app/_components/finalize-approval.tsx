@@ -38,7 +38,7 @@ export function FinalizeApproval({ token }: { token: string }) {
   if (state === "running") {
     return (
       <div role="status" className="flex items-center gap-3">
-        <span aria-hidden className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#2748d4]" />
+        <span aria-hidden className="h-2.5 w-2.5 animate-pulse rounded-full bg-accent" />
         <p className="font-serif text-xl">Finalizing…</p>
       </div>
     );

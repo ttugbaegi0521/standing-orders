@@ -1,26 +1,117 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens. Every colour in the app comes from here; components use the Tailwind names generated below
+ * (bg-paper, text-ink, border-rule, text-accent, bg-neg-wash, ...) and never a literal hex.
+ *
+ *   paper / surface / sunk     the page, raised fields, and recessed fills
+ *   ink / ink-2 / muted / faint  text, strongest to quietest
+ *   rule / rule-strong         hairlines
+ *   accent (+ wash, line)      the one signature colour: links, focus, the live stage, the price line
+ *   pos / warn / neg (+ wash, line)  status only: bought, waiting, refused
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  --paper: #faf8f3;
+  --surface: #fffefb;
+  --sunk: #f2f0e9;
+
+  --ink: #1a1915;
+  --ink-2: #3b3a34;
+  --muted: #66645c;
+  --faint: #8c8a80;
+
+  --rule: #e6e3da;
+  --rule-strong: #d3d0c5;
+
+  --accent: #2040c8;
+  --accent-wash: #edf0fc;
+  --accent-line: #c5cef4;
+
+  --pos: #17633f;
+  --pos-wash: #ecf5ee;
+  --pos-line: #bfdcc8;
+
+  --warn: #8a5a0b;
+  --warn-wash: #fbf3df;
+  --warn-line: #ecd9a6;
+
+  --neg: #a02c1e;
+  --neg-wash: #fbeeeb;
+  --neg-line: #efc9c1;
+
+  /* PayPal's own button yellow, used only on the sandbox store's checkout button. */
+  --paypal: #ffc439;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-sunk: var(--sunk);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-accent: var(--accent);
+  --color-accent-wash: var(--accent-wash);
+  --color-accent-line: var(--accent-line);
+  --color-pos: var(--pos);
+  --color-pos-wash: var(--pos-wash);
+  --color-pos-line: var(--pos-line);
+  --color-warn: var(--warn);
+  --color-warn-wash: var(--warn-wash);
+  --color-warn-line: var(--warn-line);
+  --color-neg: var(--neg);
+  --color-neg-wash: var(--neg-wash);
+  --color-neg-line: var(--neg-line);
+  --color-paypal: var(--paypal);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-serif: var(--font-display), ui-serif, Georgia, serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/*
+ * Type scale. Display, title and heading are the serif; body (text-base) and caption (text-sm) are the sans;
+ * the eyebrow is the small uppercase label above sections and figures. Money and ids use <Mono>.
+ */
+@utility type-display {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  font-size: clamp(2.5rem, 1.6rem + 4.4vw, 3.75rem);
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: -0.022em;
+}
+
+@utility type-title {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  font-size: clamp(1.75rem, 1.4rem + 1.7vw, 2.375rem);
+  font-weight: 400;
+  line-height: 1.14;
+  letter-spacing: -0.018em;
+}
+
+@utility type-heading {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  font-size: 1.3125rem;
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: -0.008em;
+}
+
+@utility type-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }

@@ -59,7 +59,7 @@ async function KillSwitchBanner() {
   await connection();
   if (!(await killSwitchState())) return null;
   return (
-    <div role="alert" className="mb-8 rounded-lg bg-red-800 px-5 py-4 text-base font-medium text-white">
+    <div role="alert" className="mb-8 rounded-sm bg-neg px-5 py-4 text-base font-medium text-paper">
       Agent paused — kill switch on. No purchases will be made.
     </div>
   );
@@ -79,7 +79,7 @@ export default function OrdersPage() {
         <KillSwitchBanner />
       </Suspense>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-        <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">Your standing orders</h1>
+        <h1 className="type-title">Your standing orders</h1>
         <div className="flex flex-wrap items-center gap-3">
           <Suspense fallback={null}>
             <KillSwitchControl />
@@ -89,7 +89,7 @@ export default function OrdersPage() {
           </Link>
         </div>
       </div>
-      <Suspense fallback={<p className="mt-10 text-[#a3a199]">Loading your orders…</p>}>
+      <Suspense fallback={<p className="mt-10 text-faint">Loading your orders…</p>}>
         <OrdersList />
       </Suspense>
     </Shell>
@@ -112,7 +112,7 @@ async function OrdersList() {
       {!problem && orders.length === 0 && (
         <div className="mt-16 max-w-md">
           <p className="font-serif text-2xl">Nothing is being watched yet.</p>
-          <p className="mt-3 text-[#6b6a64]">
+          <p className="mt-3 text-muted">
             Describe something you want to buy and the most you will pay. The agent takes it from there.
           </p>
           <Link href="/orders/new" className={`${buttonPrimary} mt-6`}>
@@ -123,8 +123,8 @@ async function OrdersList() {
 
       {orders.length > 0 && (
         <div className="mt-8">
-          <p className="mb-6 text-sm text-[#6b6a64]">{counts(orders)}</p>
-          <div className="hidden grid-cols-[1fr_6.5rem_7.5rem_7.5rem] gap-x-6 border-b border-[#e7e5df] pb-2 text-xs uppercase tracking-[0.12em] text-[#6b6a64] sm:grid">
+          <p className="mb-6 text-sm text-muted">{counts(orders)}</p>
+          <div className="hidden grid-cols-[1fr_6.5rem_7.5rem_7.5rem] gap-x-6 border-b border-rule pb-2 type-eyebrow text-muted sm:grid">
             <span>Order</span>
             <span>Max price</span>
             <span>Status</span>
@@ -134,16 +134,16 @@ async function OrdersList() {
             {orders.map((o) => {
               const muted = MUTED.has(o.status);
               return (
-                <li key={o.id} className="border-b border-[#e7e5df]">
+                <li key={o.id} className="border-b border-rule">
                   <Link
                     href={`/orders/${o.id}`}
                     className={`grid items-center gap-x-6 gap-y-3 py-5 sm:grid-cols-[1fr_6.5rem_7.5rem_7.5rem] ${
-                      muted ? "text-[#8a8982]" : "transition-colors hover:bg-[#f4f3ef]"
+                      muted ? "text-faint" : "transition-colors hover:bg-sunk"
                     }`}
                   >
                     <span>
                       <span className="line-clamp-2 font-serif text-lg leading-snug">{o.raw_intent}</span>
-                      <span className="mt-1 block text-xs text-[#a3a199]">
+                      <span className="mt-1 block text-xs text-faint">
                         Created <LocalTime iso={o.created_at} mode="relative" />
                       </span>
                     </span>

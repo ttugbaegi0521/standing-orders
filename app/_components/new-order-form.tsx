@@ -73,11 +73,11 @@ export function NewOrderForm() {
   if (created?.spec) {
     return (
       <div className="max-w-xl">
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-[#6b6a64]">Here is what I understood</p>
-        <blockquote className="mt-4 border-l-2 border-[#2748d4] pl-5 font-serif text-2xl leading-snug">
+        <p className="type-eyebrow text-muted">Here is what I understood</p>
+        <blockquote className="mt-4 border-l-2 border-accent pl-5 font-serif text-2xl leading-snug">
           {created.spec.restatement}
         </blockquote>
-        <p className="mt-5 text-sm text-[#6b6a64]">
+        <p className="mt-5 text-sm text-muted">
           If that is right, the order is live and will be checked on the next watch cycle. If not, cancel it and
           rephrase.
         </p>
@@ -99,7 +99,7 @@ export function NewOrderForm() {
         <Notice tone="amber">
           {created.warning ?? "The order was created but could not be understood yet."}
         </Notice>
-        <p className="text-sm text-[#6b6a64]">
+        <p className="text-sm text-muted">
           It is saved as <strong>needs review</strong> and will not be watched until its spec exists.
         </p>
         <Link href={`/orders/${created.id}`} className={buttonPrimary}>
@@ -132,7 +132,7 @@ export function NewOrderForm() {
             Most to spend on one purchase
           </label>
           <div className="relative mt-2">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-[#a3a199]">$</span>
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-faint">$</span>
             <input
               id="perOrder"
               inputMode="decimal"
@@ -148,7 +148,7 @@ export function NewOrderForm() {
             Most to spend per month
           </label>
           <div className="relative mt-2">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-[#a3a199]">$</span>
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-faint">$</span>
             <input
               id="monthly"
               inputMode="decimal"
@@ -163,7 +163,7 @@ export function NewOrderForm() {
 
       <div>
         <label htmlFor="merchants" className="block text-sm font-medium">
-          Merchants you trust <span className="font-normal text-[#a3a199]">(optional, comma-separated)</span>
+          Merchants you trust <span className="font-normal text-faint">(optional, comma-separated)</span>
         </label>
         <input
           id="merchants"
@@ -172,7 +172,7 @@ export function NewOrderForm() {
           placeholder="bestbuy.com, amazon.com"
           className={`${fieldClass} mt-2`}
         />
-        <p className="mt-2 text-sm text-[#6b6a64]">Purchases from anywhere else always wait for your approval.</p>
+        <p className="mt-2 text-sm text-muted">Purchases from anywhere else always wait for your approval.</p>
       </div>
 
       {error && <Notice tone="red">{error}</Notice>}
@@ -181,7 +181,7 @@ export function NewOrderForm() {
         <button type="submit" disabled={busy} className={buttonPrimary}>
           {busy ? "Reading your request…" : "Create standing order"}
         </button>
-        <Link href="/orders" className="text-sm text-[#6b6a64] hover:text-[#1c1b19]">
+        <Link href="/orders" className="text-sm text-muted hover:text-ink">
           Cancel
         </Link>
       </div>

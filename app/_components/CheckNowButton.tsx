@@ -66,7 +66,7 @@ export function CheckNowButton({ orderId, disabled = false }: { orderId: string;
         {running ? "Checking…" : refreshing ? "Updating…" : "Check now"}
       </button>
       {busy && (
-        <p role="status" className="basis-full text-sm text-[#6b6a64]">
+        <p role="status" className="basis-full text-sm text-muted">
           {running ? "Searching, scoring and deciding. This can take up to a minute." : "Loading the new decision…"}
         </p>
       )}
@@ -79,7 +79,7 @@ export function CheckNowButton({ orderId, disabled = false }: { orderId: string;
         <div className="basis-full">
           <Notice>
             <strong className="capitalize">{result.action.replace("_", " ")}.</strong> {result.reasoning}
-            {result.error && <span className="mt-1 block text-red-800">{result.error}</span>}
+            {result.error && <span className="mt-1 block text-neg">{result.error}</span>}
           </Notice>
         </div>
       )}

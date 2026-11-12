@@ -50,7 +50,7 @@ async function productTitle(v: ApprovalView): Promise<string | null> {
 export default function ApprovalPage({ params, searchParams }: PageProps<"/approvals/[token]">) {
   return (
     <Shell>
-      <Suspense fallback={<p className="font-serif text-xl text-[#a3a199]">Loading…</p>}>
+      <Suspense fallback={<p className="font-serif text-xl text-faint">Loading…</p>}>
         <ApprovalBody params={params} searchParams={searchParams} />
       </Suspense>
     </Shell>
@@ -89,22 +89,22 @@ async function ApprovalBody({
   if (captured) {
     body = (
       <>
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-[#6b6a64]">Purchase confirmed</p>
-        <h1 className="mt-3 font-serif text-3xl leading-tight tracking-tight sm:text-4xl">
+        <p className="type-eyebrow text-muted">Purchase confirmed</p>
+        <h1 className="mt-3 type-title">
           {title ?? view.raw_intent}
         </h1>
         <dl className="mt-10 grid max-w-md grid-cols-[auto_1fr] gap-x-8 gap-y-4 text-[0.95rem]">
-          <dt className="text-[#6b6a64]">Amount</dt>
+          <dt className="text-muted">Amount</dt>
           <dd>
             <Mono>{dollars(view.amount_cents)}</Mono>
           </dd>
-          <dt className="text-[#6b6a64]">Merchant</dt>
+          <dt className="text-muted">Merchant</dt>
           <dd>{view.merchant}</dd>
-          <dt className="text-[#6b6a64]">Capture</dt>
+          <dt className="text-muted">Capture</dt>
           <dd>
             <Mono>{view.capture_id ?? "—"}</Mono>
           </dd>
-          <dt className="text-[#6b6a64]">Order</dt>
+          <dt className="text-muted">Order</dt>
           <dd>
             <OrderStatusPill status={view.order_status} />
           </dd>
@@ -114,8 +114,8 @@ async function ApprovalBody({
   } else if (view.resolution === "rejected" || view.resolution === "expired" || view.order_status === "cancelled") {
     body = (
       <>
-        <h1 className="font-serif text-3xl tracking-tight">Nothing was bought</h1>
-        <p className="mt-4 max-w-prose text-[#6b6a64]">
+        <h1 className="type-title">Nothing was bought</h1>
+        <p className="mt-4 max-w-prose text-muted">
           {view.order_status === "cancelled"
             ? "This standing order was cancelled, so the purchase was not completed."
             : view.resolution === "expired"
@@ -127,8 +127,8 @@ async function ApprovalBody({
   } else if (cancelled) {
     body = (
       <>
-        <h1 className="font-serif text-3xl tracking-tight">You did not approve this purchase</h1>
-        <p className="mt-4 max-w-prose text-[#6b6a64]">
+        <h1 className="type-title">You did not approve this purchase</h1>
+        <p className="mt-4 max-w-prose text-muted">
           Nothing was charged. The approval stays open until <LocalTime iso={view.expires_at.toISOString()} mode="both" className="font-mono" />; you can
           still approve it from the order.
         </p>
@@ -137,10 +137,10 @@ async function ApprovalBody({
   } else {
     body = (
       <>
-        <h1 className="font-serif text-3xl tracking-tight">Completing your purchase</h1>
-        <p className="mb-8 mt-4 max-w-prose text-[#6b6a64]">PayPal has your approval. Confirming the payment now.</p>
+        <h1 className="type-title">Completing your purchase</h1>
+        <p className="mb-8 mt-4 max-w-prose text-muted">PayPal has your approval. Confirming the payment now.</p>
         <FinalizeApproval token={token} />
-        {view.fill_error && <p className="mt-6 text-sm text-[#6b6a64]">Last attempt: {view.fill_error}</p>}
+        {view.fill_error && <p className="mt-6 text-sm text-muted">Last attempt: {view.fill_error}</p>}
       </>
     );
   }
