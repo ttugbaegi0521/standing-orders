@@ -1,117 +1,126 @@
 @import "tailwindcss";
 
 /*
- * Design tokens. Every colour in the app comes from here; components use the Tailwind names generated below
- * (bg-paper, text-ink, border-rule, text-accent, bg-neg-wash, ...) and never a literal hex.
+ * Design tokens: a dark trading-terminal palette. The app is dark-only. Every colour comes from here; components use
+ * the Tailwind names generated below (bg-bg, bg-panel, border-border, text-accent, text-refuse, ...) and never a
+ * literal hex. Tints and hairlines of a colour use Tailwind's opacity modifier, e.g. bg-refuse/10, border-buy/40.
  *
- *   paper / surface / sunk     the page, raised fields, and recessed fills
- *   ink / ink-2 / muted / faint  text, strongest to quietest
- *   rule / rule-strong         hairlines
- *   accent (+ wash, line)      the one signature colour: links, focus, the live stage, the price line
- *   pos / warn / neg (+ wash, line)  status only: bought, waiting, refused
+ *   bg / panel / panel-2          the page, bordered panels, and fields/raised fills inside panels
+ *   border / border-strong        1px hairlines, quietest to strongest
+ *   ink / ink-2 / muted / faint   text, strongest to quietest. faint is for decoration only (indices, separators,
+ *                                 the footer); anything a reader needs is ink, ink-2 or muted, which all pass WCAG AA
+ *                                 on bg and panel
+ *   accent                        electric cyan: UI emphasis, actions, focus, the live stage, the price line
+ *   buy / hold / refuse           semantic status only, kept distinct from accent: bought, waiting, refused/blocked
  */
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 
-  --paper: #faf8f3;
-  --surface: #fffefb;
-  --sunk: #f2f0e9;
+  --bg: #0a0b0d;
+  --panel: #131519;
+  --panel-2: #1a1d22;
+  --border: #262a31;
+  --border-strong: #353a43;
 
-  --ink: #1a1915;
-  --ink-2: #3b3a34;
-  --muted: #66645c;
-  --faint: #8c8a80;
+  --ink: #e6e8ec;
+  --ink-2: #c3c7ce;
+  --muted: #8b9099;
+  --faint: #5a6069;
 
-  --rule: #e6e3da;
-  --rule-strong: #d3d0c5;
+  --accent: #22d3ee;
 
-  --accent: #2040c8;
-  --accent-wash: #edf0fc;
-  --accent-line: #c5cef4;
+  --buy: #4ade80;
+  --hold: #fbbf24;
+  --refuse: #f87171;
 
-  --pos: #17633f;
-  --pos-wash: #ecf5ee;
-  --pos-line: #bfdcc8;
-
-  --warn: #8a5a0b;
-  --warn-wash: #fbf3df;
-  --warn-line: #ecd9a6;
-
-  --neg: #a02c1e;
-  --neg-wash: #fbeeeb;
-  --neg-line: #efc9c1;
-
-  /* PayPal's own button yellow, used only on the sandbox store's checkout button. */
+  /* PayPal's own button yellow, used only on the sandbox store's checkout button: the one deliberate exception. */
   --paypal: #ffc439;
 }
 
 @theme inline {
-  --color-paper: var(--paper);
-  --color-surface: var(--surface);
-  --color-sunk: var(--sunk);
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-muted: var(--muted);
   --color-faint: var(--faint);
-  --color-rule: var(--rule);
-  --color-rule-strong: var(--rule-strong);
   --color-accent: var(--accent);
-  --color-accent-wash: var(--accent-wash);
-  --color-accent-line: var(--accent-line);
-  --color-pos: var(--pos);
-  --color-pos-wash: var(--pos-wash);
-  --color-pos-line: var(--pos-line);
-  --color-warn: var(--warn);
-  --color-warn-wash: var(--warn-wash);
-  --color-warn-line: var(--warn-line);
-  --color-neg: var(--neg);
-  --color-neg-wash: var(--neg-wash);
-  --color-neg-line: var(--neg-line);
+  --color-buy: var(--buy);
+  --color-hold: var(--hold);
+  --color-refuse: var(--refuse);
   --color-paypal: var(--paypal);
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-serif: var(--font-display), ui-serif, Georgia, serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 body {
-  background: var(--paper);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--ink);
+}
+
 /*
- * Type scale. Display, title and heading are the serif; body (text-base) and caption (text-sm) are the sans;
- * the eyebrow is the small uppercase label above sections and figures. Money and ids use <Mono>.
+ * Type scale. Display, title and heading are a tight grotesk (Geist) for prose-like headlines such as an order's
+ * own words; everything that is data or a label (eyebrows, section headers, numbers, ids, stamps) is the mono.
  */
 @utility type-display {
-  font-family: var(--font-display), ui-serif, Georgia, serif;
-  font-size: clamp(2.5rem, 1.6rem + 4.4vw, 3.75rem);
-  font-weight: 400;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(2.25rem, 1.5rem + 3.6vw, 3.5rem);
+  font-weight: 600;
   line-height: 1.04;
-  letter-spacing: -0.022em;
+  letter-spacing: -0.035em;
 }
 
 @utility type-title {
-  font-family: var(--font-display), ui-serif, Georgia, serif;
-  font-size: clamp(1.75rem, 1.4rem + 1.7vw, 2.375rem);
-  font-weight: 400;
-  line-height: 1.14;
-  letter-spacing: -0.018em;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(1.5rem, 1.25rem + 1.2vw, 2rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
 }
 
 @utility type-heading {
-  font-family: var(--font-display), ui-serif, Georgia, serif;
-  font-size: 1.3125rem;
-  font-weight: 400;
-  line-height: 1.3;
-  letter-spacing: -0.008em;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.012em;
 }
 
 @utility type-eyebrow {
+  font-family: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.6875rem;
   font-weight: 500;
   line-height: 1.2;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+/* The terminal cursor on the landing hero. Still for anyone who prefers reduced motion. */
+@keyframes cursor-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@utility cursor-blink {
+  animation: cursor-blink 1.1s steps(1, end) infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
