@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Shell, buttonPrimary } from "./_components/ui";
+import { Shell, buttonPrimary, buttonQuiet } from "./_components/ui";
 
 const STEPS = [
   ["Say what you want", "Plain language and a price. The agent turns it into a spec you confirm."],
@@ -7,17 +7,30 @@ const STEPS = [
   ["It buys, or refuses", "Real deals go to you for one-tap PayPal approval. Fake sales are skipped, with the reasoning shown."],
 ];
 
+const STACK = [
+  ["PayPal", "Orders + capture"],
+  ["Claude", "parses, scores, decides"],
+  ["Channel3", "live product data"],
+  ["Render", "scheduled watching"],
+];
+
 export default function Home() {
   return (
     <Shell>
       <section className="pt-6 sm:pt-12">
         <h1 className="max-w-2xl font-serif text-4xl leading-[1.12] tracking-tight sm:text-5xl">
-          Limit orders for shopping — tell an agent what you want and your price; it watches and buys when it
-          qualifies.
+          Limit orders for shopping.
         </h1>
-        <div className="mt-9">
+        <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#3a3935]">
+          Tell an agent what you want and your price. It watches the market, buys with PayPal when a real deal
+          qualifies, and refuses the fake ones.
+        </p>
+        <div className="mt-9 flex flex-wrap items-center gap-3">
           <Link href="/orders" className={`${buttonPrimary} px-7 py-3 text-base`}>
             Go to your orders →
+          </Link>
+          <Link href="/store" className={`${buttonQuiet} px-7 py-3 text-base`}>
+            Visit the sandbox store
           </Link>
         </div>
       </section>
@@ -31,6 +44,18 @@ export default function Home() {
           </li>
         ))}
       </ol>
+
+      <section className="mt-16 border-t border-[#e7e5df] pt-10">
+        <h2 className="text-xs font-medium uppercase tracking-[0.14em] text-[#6b6a64]">How it’s built</h2>
+        <dl className="mt-5 grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
+          {STACK.map(([name, role]) => (
+            <div key={name}>
+              <dt className="font-serif text-xl text-[#2748d4]">{name}</dt>
+              <dd className="mt-1 text-sm leading-relaxed text-[#6b6a64]">{role}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
       <p className="mt-16 max-w-xl text-sm leading-relaxed text-[#6b6a64]">
         You set the limits: a cap per order, a monthly cap, the merchants you trust. Anything outside them comes

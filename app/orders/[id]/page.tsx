@@ -11,6 +11,7 @@ import { LocalTime } from "../../_components/LocalTime";
 import { PriceChart } from "../../_components/PriceChart";
 import { dollars } from "../../_components/format";
 import { OrderActions } from "../../_components/order-actions";
+import { analyzePriceHistory, type PriceSignals } from "@/workflows/standing-order/price-signals";
 import { KILL_SWITCH_REASON } from "@/workflows/standing-order/steps/guardrails";
 import { ActionPill, Mono, Notice, OrderStatusPill, Pill, SectionTitle, Shell, buttonPrimary } from "../../_components/ui";
 
@@ -75,6 +76,104 @@ function Decision({ d }: { d: OrderDetail["decisions"][number] }) {
   );
 }
 
+/** "Oct 30": the day only, in UTC so it reads the same wherever the page is rendered. */
+function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/** "4LS4…835J"; the full id is in the title and in the purchases list below. */
+function shortId(id: string): string {
+  return id.length > 10 ? `${id.slice(0, 4)}…${id.slice(-4)}` : id;
+}
+
+/**
+ * The fake-sale signals behind the latest decision, or null when it was not a fake-sale refusal. The signals are
+ * not stored with the decision, so they are recomputed with the same pure function the decide step used, over the
+ * history as it stood when the decision was made.
+ */
+function fakeSaleRefusal(
+  latest: OrderDetail["decisions"][number] | undefined,
+  candidate: CandidateRow | null,
+  history: PricePoint[],
+): PriceSignals | null {
+  if (!latest || !candidate || latest.action !== "skip" || latest.model_action !== "skip") return null;
+  const signals = analyzePriceHistory(history, candidate.price_cents, new Date(latest.created_at).toISOString());
+  return signals.fakeSale.detected ? signals : null;
+}
+
+function RefusalCallout({ signals }: { signals: PriceSignals }) {
+  const { inflatedPeakCents, inflatedAt, claimedDiscountPct } = signals.fakeSale;
+  return (
+    <section
+      role="status"
+      aria-label="Refused: fake sale"
+      className="mb-14 rounded-xl border border-l-4 border-red-200 border-l-red-700 bg-red-50 p-6"
+    >
+      <p className="text-xs font-medium uppercase tracking-[0.14em] text-red-800">Not bought</p>
+      <h2 className="mt-2 font-serif text-2xl leading-tight tracking-tight text-red-950 sm:text-3xl">
+        Refused — fake sale
+      </h2>
+      <p className="mt-3 max-w-prose text-[1.05rem] leading-relaxed text-red-950">
+        “Discount” measured from a price raised to <Mono>{dollars(inflatedPeakCents)}</Mono>
+        {inflatedAt ? ` on ${shortDate(inflatedAt)}` : ""}.
+      </p>
+      <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-3 text-sm text-red-900">
+        <div>
+          <dt className="text-red-800">Usual price</dt>
+          <dd className="mt-0.5 text-base">
+            <Mono>{dollars(signals.baselineCents)}</Mono>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-red-800">Raised to</dt>
+          <dd className="mt-0.5 text-base">
+            <Mono>{dollars(inflatedPeakCents)}</Mono>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-red-800">“Sale” price now</dt>
+          <dd className="mt-0.5 text-base">
+            <Mono>{dollars(signals.currentPriceCents)}</Mono>
+            {claimedDiscountPct !== null && (
+              <span className="ml-2 text-sm text-red-800">advertised as {Math.round(claimedDiscountPct * 100)}% off</span>
+            )}
+          </dd>
+        </div>
+      </dl>
+      <a href="#price-history" className="mt-5 inline-block text-sm font-medium text-red-900 underline underline-offset-4">
+        See it in the price history ↓
+      </a>
+    </section>
+  );
+}
+
+function FilledBanner({ fill }: { fill: OrderDetail["fills"][number] }) {
+  return (
+    <section
+      role="status"
+      className="mb-14 flex items-baseline gap-x-3 rounded-xl border border-l-4 border-emerald-200 border-l-emerald-700 bg-emerald-50 px-6 py-5 text-emerald-950"
+    >
+      <span aria-hidden className="text-emerald-700">
+        ✓
+      </span>
+      <p className="font-serif text-xl leading-snug sm:text-2xl">
+        Bought for <Mono>{dollars(fill.amount_cents)}</Mono> via PayPal
+        {fill.capture_id && (
+          <>
+            {" "}
+            <span className="font-sans text-base text-emerald-800">
+              · capture{" "}
+              <span title={fill.capture_id}>
+                <Mono>{shortId(fill.capture_id)}</Mono>
+              </span>
+            </span>
+          </>
+        )}
+      </p>
+    </section>
+  );
+}
+
 // `params` and the database are request-time, so the page body streams inside a Suspense boundary.
 export default function OrderPage({ params }: PageProps<"/orders/[id]">) {
   return (
@@ -119,6 +218,9 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
     }
   }
 
+  const refusal = fakeSaleRefusal(decisions[0], candidate, history);
+  const boughtFill = order.status === "filled" ? (fills.find((f) => f.status === "captured") ?? null) : null;
+
   return (
     <>
       <Link href="/orders" className="text-sm text-[#6b6a64] hover:text-[#1c1b19]">
@@ -146,6 +248,9 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
         <CheckNowButton orderId={order.id} disabled={order.status !== "active" && order.status !== "needs_review"} />
         <OrderActions orderId={order.id} status={order.status} />
       </div>
+
+      {boughtFill && <FilledBanner fill={boughtFill} />}
+      {refusal && <RefusalCallout signals={refusal} />}
 
       {approvals.length > 0 && (
         <section className="mb-14 rounded-xl border border-[#c9d2f6] bg-[#eef1fd] p-6">
@@ -318,7 +423,7 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
         </section>
       )}
 
-      <section className="mb-14">
+      <section id="price-history" className="mb-14 scroll-mt-6">
         <SectionTitle>Price history</SectionTitle>
         <PriceChart points={history} maxPriceCents={order.max_price_cents ?? spec?.maxPriceCents ?? null} />
       </section>
