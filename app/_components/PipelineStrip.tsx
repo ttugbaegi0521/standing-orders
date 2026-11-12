@@ -1,6 +1,5 @@
 // The five stages of one agent cycle, with the latest cycle's state: Parse → Search → Decide → Guardrails → Execute.
-// Built only from what the order page already loads; no queries. Rendered as a console status line on wide screens
-// (01 PARSE ✓ · 02 SEARCH … · 03 DECIDE [FILL] …), a stack of readout rows on phones.
+// Built only from what the order page already loads; no queries. A row of nodes on wide screens, a stack on phones.
 import type { ReactNode } from "react";
 import { KILL_SWITCH_REASON } from "@/workflows/standing-order/steps/guardrails";
 import { ActionPill } from "./ui";
@@ -33,11 +32,11 @@ interface Stage {
   hint?: string;
 }
 
-const GREEN = "text-buy";
-const RED = "text-refuse";
-const AMBER = "text-hold";
+const GREEN = "text-pos";
+const RED = "text-neg";
+const AMBER = "text-warn";
 const BLUE = "text-accent";
-const MUTED = "text-muted";
+const MUTED = "text-faint";
 
 function buildStages({ hasSpec, consideredCount, decision, filled, approvalOpen }: Props): Stage[] {
   const blocked = decision?.guardrail_reasons.includes(KILL_SWITCH_REASON) ?? false;
@@ -87,14 +86,7 @@ function buildStages({ hasSpec, consideredCount, decision, filled, approvalOpen 
     {
       label: "Search",
       state: state(1, consideredCount > 0),
-      status:
-        consideredCount > 0 ? (
-          <span className="text-ink-2">
-            <span className="tabular-nums text-ink">{consideredCount}</span> via Channel3
-          </span>
-        ) : (
-          notRun
-        ),
+      status: consideredCount > 0 ? <span className="text-ink-2">{consideredCount} via Channel3</span> : notRun,
     },
     {
       label: "Decide",
@@ -115,52 +107,36 @@ function buildStages({ hasSpec, consideredCount, decision, filled, approvalOpen 
   ];
 }
 
+const RULE: Record<State, string> = {
+  active: "border-accent",
+  done: "border-rule-strong",
+  pending: "border-rule",
+};
 const LABEL: Record<State, string> = {
   active: "text-accent",
   done: "text-ink",
-  pending: "text-muted",
-};
-const INDEX: Record<State, string> = {
-  active: "text-accent",
-  done: "text-muted",
   pending: "text-faint",
 };
 
 export function PipelineStrip(props: Props) {
   const stages = buildStages(props);
   return (
-    <ol
-      aria-label="Agent cycle"
-      className="flex flex-col font-mono text-[0.8125rem] leading-snug lg:flex-row lg:flex-wrap lg:items-center lg:gap-y-2"
-    >
+    <ol aria-label="Agent cycle" className="grid grid-cols-1 gap-y-1 sm:grid-cols-5">
       {stages.map((s, i) => (
         <li
           key={s.label}
           title={s.hint}
           aria-current={s.state === "active" ? "step" : undefined}
-          className="flex min-w-0 items-center border-t border-border py-2.5 first:border-t-0 first:pt-0 last:pb-0 lg:border-t-0 lg:py-0"
+          className={`relative flex min-w-0 items-center justify-between gap-3 border-l-2 py-2 pl-3 sm:block sm:border-l-0 sm:border-t-2 sm:py-0 sm:pl-0 sm:pr-5 sm:pt-3 ${RULE[s.state]}`}
         >
-          <span
-            className={`flex min-w-0 flex-1 items-center justify-between gap-3 lg:flex-none lg:justify-start lg:gap-2 ${
-              s.state === "active" ? "lg:-mx-1.5 lg:bg-accent/10 lg:px-1.5 lg:py-1 lg:outline lg:outline-accent/30" : ""
-            }`}
-          >
-            <span className={`flex items-baseline gap-2 ${LABEL[s.state]}`}>
-              <span className={`text-[0.6875rem] tabular-nums ${INDEX[s.state]}`}>{String(i + 1).padStart(2, "0")}</span>
-              <span className={`uppercase tracking-[0.08em] ${s.state === "active" ? "font-bold" : "font-medium"}`}>
-                {s.label}
-              </span>
-              {s.state === "active" && (
-                <span aria-hidden className="text-accent lg:hidden">
-                  ◂
-                </span>
-              )}
-            </span>
-            <span className="min-w-0 text-right text-xs lg:text-left">{s.status}</span>
-          </span>
+          <p className={`flex items-baseline gap-2 ${LABEL[s.state]}`}>
+            <span className="font-mono text-xs tabular-nums">{String(i + 1).padStart(2, "0")}</span>
+            <span className={`font-serif text-lg leading-none ${s.state === "active" ? "font-medium" : ""}`}>{s.label}</span>
+          </p>
+          <p className="min-w-0 text-right text-sm sm:mt-2 sm:text-left">{s.status}</p>
           {i < stages.length - 1 && (
-            <span aria-hidden className="hidden px-2 text-faint lg:inline">
-              ·
+            <span aria-hidden className="absolute right-1.5 top-3 hidden text-sm leading-none text-faint sm:block">
+              →
             </span>
           )}
         </li>

@@ -14,7 +14,7 @@ import { dollars } from "../../_components/format";
 import { OrderActions } from "../../_components/order-actions";
 import { analyzePriceHistory, type PriceSignals } from "@/workflows/standing-order/price-signals";
 import { KILL_SWITCH_REASON } from "@/workflows/standing-order/steps/guardrails";
-import { ActionPill, Mono, Notice, OrderStatusPill, Panel, Pill, Shell, buttonPrimary } from "../../_components/ui";
+import { ActionPill, Mono, Notice, OrderStatusPill, Pill, SectionTitle, Shell, buttonPrimary } from "../../_components/ui";
 
 interface CandidateRow {
   channel3_product_id: string;
@@ -29,14 +29,12 @@ interface CandidateRow {
 }
 
 function List({ items, empty }: { items: string[]; empty: string }) {
-  if (items.length === 0) return <p className="text-sm text-muted">{empty}</p>;
+  if (items.length === 0) return <p className="text-sm text-faint">{empty}</p>;
   return (
     <ul className="space-y-1.5">
       {items.map((item) => (
-        <li key={item} className="flex gap-2.5 text-[0.95rem] text-ink-2">
-          <span aria-hidden className="shrink-0 font-mono text-accent">
-            ›
-          </span>
+        <li key={item} className="flex gap-2.5 text-[0.95rem]">
+          <span aria-hidden className="mt-[0.62em] h-px w-3 shrink-0 bg-faint" />
           {item}
         </li>
       ))}
@@ -56,25 +54,25 @@ function Decision({ d }: { d: OrderDetail["decisions"][number] }) {
   const because = d.guardrail_reasons.filter(Boolean).map(inSentence).join("; ");
   const killSwitch = d.guardrail_reasons.includes(KILL_SWITCH_REASON);
   return (
-    <li className="border-t border-border px-4 py-4 first:border-t-0 sm:px-5">
+    <li className="border-t border-rule py-4 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <LocalTime iso={d.created_at} mode="both" className="font-mono text-xs tabular-nums text-muted" />
         <ActionPill action={d.action} />
+        <LocalTime iso={d.created_at} mode="both" className="font-mono text-xs tabular-nums text-muted" />
       </div>
       {changed ? (
-        <p className="mt-2 font-mono text-xs leading-relaxed text-hold">
+        <p className="mt-2 text-sm text-ink-2">
           Claude proposed <strong>{d.model_action}</strong> → guardrails changed it to <strong>{d.action}</strong>
           {because ? ` because ${because}.` : "."}
         </p>
       ) : (
-        because && <p className="mt-2 font-mono text-xs leading-relaxed text-muted">Guardrail note: {because}.</p>
+        because && <p className="mt-2 text-sm text-muted">Guardrail note: {because}.</p>
       )}
       {killSwitch && (
-        <p className="mt-2 border-l-2 border-refuse bg-refuse/10 px-3 py-2 font-mono text-xs font-semibold uppercase tracking-[0.06em] text-refuse">
+        <p className="mt-2 rounded-sm bg-neg-wash px-3 py-2 text-sm font-medium text-neg">
           Blocked by the kill switch. No purchase was made.
         </p>
       )}
-      <p className="mt-2 max-w-prose text-[0.95rem] leading-relaxed text-ink-2">{d.reasoning}</p>
+      <p className="mt-2 max-w-prose text-[0.95rem] leading-relaxed">{d.reasoning}</p>
     </li>
   );
 }
@@ -110,52 +108,42 @@ function RefusalCallout({ signals }: { signals: PriceSignals }) {
     <section
       role="status"
       aria-label="Refused: fake sale"
-      className="border border-t-2 border-border border-t-refuse bg-panel"
+      className="mb-14 border-t-2 border-neg bg-neg-wash px-5 py-6 sm:px-7 sm:py-7"
     >
-      <div className="px-4 pb-5 pt-4 sm:px-5">
-        <p className="type-eyebrow flex items-center gap-2 text-refuse">
-          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-refuse" />
-          Not bought
-        </p>
-        <h2 className="mt-3 font-mono text-lg font-bold uppercase tracking-[0.08em] text-refuse sm:text-xl">
-          Refused — fake sale
-        </h2>
-        <p className="mt-3 max-w-prose text-[1.0625rem] leading-relaxed text-ink">
-          “Discount” measured from a price raised to <Mono className="text-refuse">{dollars(inflatedPeakCents)}</Mono>
-          {inflatedAt ? ` on ${shortDate(inflatedAt)}` : ""}.
-        </p>
-      </div>
-      <dl className="grid grid-cols-1 border-t border-border text-ink sm:grid-cols-3">
-        <div className="border-border px-4 py-3 sm:px-5">
-          <dt className="type-eyebrow text-muted">Usual price</dt>
-          <dd className="mt-1.5 text-lg">
+      <p className="type-eyebrow text-neg">Not bought</p>
+      <h2 className="type-title mt-3 text-neg">
+        Refused — fake sale
+      </h2>
+      <p className="mt-3 max-w-prose text-[1.05rem] leading-relaxed text-ink">
+        “Discount” measured from a price raised to <Mono>{dollars(inflatedPeakCents)}</Mono>
+        {inflatedAt ? ` on ${shortDate(inflatedAt)}` : ""}.
+      </p>
+      <dl className="mt-6 flex flex-wrap gap-x-10 gap-y-4 border-t border-neg-line pt-5 text-ink">
+        <div>
+          <dt className="type-eyebrow text-neg">Usual price</dt>
+          <dd className="mt-2 text-lg">
             <Mono>{dollars(signals.baselineCents)}</Mono>
           </dd>
         </div>
-        <div className="border-t border-border px-4 py-3 sm:border-l sm:border-t-0 sm:px-5">
-          <dt className="type-eyebrow text-muted">Raised to</dt>
-          <dd className="mt-1.5 text-lg">
-            <Mono className="text-refuse">{dollars(inflatedPeakCents)}</Mono>
+        <div>
+          <dt className="type-eyebrow text-neg">Raised to</dt>
+          <dd className="mt-2 text-lg">
+            <Mono>{dollars(inflatedPeakCents)}</Mono>
           </dd>
         </div>
-        <div className="border-t border-border px-4 py-3 sm:border-l sm:border-t-0 sm:px-5">
-          <dt className="type-eyebrow text-muted">“Sale” price now</dt>
-          <dd className="mt-1.5 text-lg">
+        <div>
+          <dt className="type-eyebrow text-neg">“Sale” price now</dt>
+          <dd className="mt-2 text-lg">
             <Mono>{dollars(signals.currentPriceCents)}</Mono>
             {claimedDiscountPct !== null && (
-              <span className="ml-2 font-mono text-xs text-muted">advertised as {Math.round(claimedDiscountPct * 100)}% off</span>
+              <span className="ml-2 text-sm text-muted">advertised as {Math.round(claimedDiscountPct * 100)}% off</span>
             )}
           </dd>
         </div>
       </dl>
-      <div className="border-t border-border px-4 py-3 sm:px-5">
-        <a
-          href="#price-history"
-          className="font-mono text-xs font-semibold uppercase tracking-[0.08em] text-refuse underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          See it in the price history ↓
-        </a>
-      </div>
+      <a href="#price-history" className="mt-5 inline-block text-sm font-medium text-neg underline underline-offset-4">
+        See it in the price history ↓
+      </a>
     </section>
   );
 }
@@ -164,20 +152,20 @@ function FilledBanner({ fill }: { fill: OrderDetail["fills"][number] }) {
   return (
     <section
       role="status"
-      className="flex items-baseline gap-x-3 border border-t-2 border-border border-t-buy bg-panel px-4 py-4 text-ink sm:px-5"
+      className="mb-14 flex items-baseline gap-x-3 border-t-2 border-pos bg-pos-wash px-5 py-5 text-ink sm:px-7"
     >
-      <span aria-hidden className="font-mono text-lg text-buy">
+      <span aria-hidden className="text-pos">
         ✓
       </span>
-      <p className="font-mono text-base font-semibold uppercase tracking-[0.06em] sm:text-lg">
-        Bought for <Mono className="text-buy">{dollars(fill.amount_cents)}</Mono> via PayPal
+      <p className="type-heading sm:text-2xl">
+        Bought for <Mono>{dollars(fill.amount_cents)}</Mono> via PayPal
         {fill.capture_id && (
           <>
             {" "}
-            <span className="text-xs font-normal normal-case tracking-normal text-muted">
+            <span className="font-sans text-base text-muted">
               · capture{" "}
               <span title={fill.capture_id}>
-                <Mono className="text-ink-2">{shortId(fill.capture_id)}</Mono>
+                <Mono>{shortId(fill.capture_id)}</Mono>
               </span>
             </span>
           </>
@@ -190,8 +178,8 @@ function FilledBanner({ fill }: { fill: OrderDetail["fills"][number] }) {
 // `params` and the database are request-time, so the page body streams inside a Suspense boundary.
 export default function OrderPage({ params }: PageProps<"/orders/[id]">) {
   return (
-    <Shell width="max-w-5xl">
-      <Suspense fallback={<p className="font-mono text-sm text-muted">Loading order…</p>}>
+    <Shell>
+      <Suspense fallback={<p className="text-faint">Loading order…</p>}>
         <OrderBody params={params} />
       </Suspense>
     </Shell>
@@ -235,30 +223,30 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
   const boughtFill = order.status === "filled" ? (fills.find((f) => f.status === "captured") ?? null) : null;
 
   return (
-    <div className="flex flex-col gap-4">
-      <Link
-        href="/orders"
-        className="self-start font-mono text-xs uppercase tracking-[0.1em] text-muted transition-colors hover:text-accent"
-      >
+    <>
+      <Link href="/orders" className="text-sm text-muted hover:text-ink">
         ← All orders
       </Link>
 
-      <header className="mb-2 border-b border-border pb-6">
+      <header className="mb-12 mt-6">
         <div className="flex flex-wrap items-center gap-3">
           <OrderStatusPill status={order.status} />
-          <Mono className="break-all text-xs text-muted">{order.id}</Mono>
+          <Mono className="text-xs text-faint">{order.id}</Mono>
         </div>
         <h1 className="mt-4 type-title">{order.raw_intent}</h1>
       </header>
 
       {order.status === "needs_review" && (
-        <Notice tone="amber">
-          This order has no parsed spec yet, so it is not being watched. Cancel it and create a new one with
-          clearer wording.
-        </Notice>
+        <div className="mb-10">
+          <Notice tone="amber">
+            This order has no parsed spec yet, so it is not being watched. Cancel it and create a new one with
+            clearer wording.
+          </Notice>
+        </div>
       )}
 
-      <Panel title="Latest agent cycle" tag="Cycle">
+      <section className="mb-10">
+        <h2 className="type-eyebrow mb-4 text-muted">Latest agent cycle</h2>
         <PipelineStrip
           hasSpec={spec !== null}
           consideredCount={Math.max(detail.considered.length, candidate ? 1 : 0)}
@@ -266,9 +254,9 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
           filled={order.status === "filled" || fills.some((f) => f.status === "captured")}
           approvalOpen={approvals.length > 0}
         />
-      </Panel>
+      </section>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="mb-14 flex flex-wrap items-center gap-3">
         <CheckNowButton orderId={order.id} disabled={order.status !== "active" && order.status !== "needs_review"} />
         <OrderActions orderId={order.id} status={order.status} />
       </div>
@@ -277,14 +265,11 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
       {refusal && <RefusalCallout signals={refusal} />}
 
       {approvals.length > 0 && (
-        <section className="border border-t-2 border-border border-t-accent bg-panel px-4 py-5 sm:px-5">
-          <h2 className="type-eyebrow mb-4 flex items-center gap-2 text-accent">
-            <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent motion-reduce:animate-none" />
-            Waiting for you
-          </h2>
+        <section className="mb-14 border-t-2 border-accent bg-accent-wash px-5 py-6 sm:px-7">
+          <h2 className="type-eyebrow mb-4 text-accent">Waiting for you</h2>
           {approvals.map((a) => (
             <div key={a.token}>
-              <p className="max-w-prose text-ink-2">
+              <p className="max-w-prose">
                 The agent found a match and needs your OK before buying. Approve on PayPal; you will land back here
                 once it is captured.
               </p>
@@ -294,7 +279,7 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
                     Approve purchase
                   </a>
                 )}
-                <span className="font-mono text-xs text-muted">
+                <span className="text-sm text-muted">
                   Expires <LocalTime iso={a.expires_at} mode="both" />
                 </span>
               </div>
@@ -304,183 +289,159 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
       )}
 
       {fills.length > 0 && (
-        <Panel title="Purchases" index="05" tag="Execute" bodyClassName="">
-          <ul>
+        <section className="mb-14">
+          <SectionTitle>Purchases</SectionTitle>
+          <ul className="space-y-4">
             {fills.map((f, i) => (
-              <li
-                key={i}
-                className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-t border-border px-4 py-3 first:border-t-0 sm:px-5"
-              >
-                <Mono className="text-lg text-ink">{dollars(f.amount_cents)}</Mono>
-                <span className="text-ink-2">{f.merchant}</span>
-                <span className="font-mono text-xs uppercase tracking-[0.08em] text-muted">{f.status}</span>
+              <li key={i} className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-t border-rule pt-4 first:border-t-0 first:pt-0">
+                <Mono className="text-lg">{dollars(f.amount_cents)}</Mono>
+                <span>{f.merchant}</span>
+                <span className="text-sm capitalize text-muted">{f.status}</span>
                 {f.capture_id && (
                   <span className="text-sm text-muted">
-                    Capture <Mono className="break-all text-ink-2">{f.capture_id}</Mono>
+                    Capture <Mono>{f.capture_id}</Mono>
                   </span>
                 )}
-                {f.error && <span className="w-full text-sm text-refuse">{f.error}</span>}
+                {f.error && <span className="w-full text-sm text-neg">{f.error}</span>}
               </li>
             ))}
           </ul>
-        </Panel>
+        </section>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="What the agent understood" index="01" tag="Parse">
-          {spec ? (
-            <div className="space-y-6">
-              <blockquote className="border-l-2 border-accent pl-4 type-heading text-ink">{spec.restatement}</blockquote>
-              <dl className="grid gap-px border border-border bg-border sm:grid-cols-2">
-                <div className="bg-panel p-3">
-                  <dt className="type-eyebrow mb-2 text-muted">Category</dt>
-                  <dd className="text-[0.95rem] text-ink-2">{spec.category}</dd>
-                </div>
-                <div className="bg-panel p-3">
-                  <dt className="type-eyebrow mb-2 text-muted">Max price</dt>
-                  <dd>
-                    <Mono className="text-base text-ink">{dollars(order.max_price_cents ?? spec.maxPriceCents)}</Mono>
-                  </dd>
-                </div>
-                <div className="bg-panel p-3">
-                  <dt className="type-eyebrow mb-2 text-muted">Must have</dt>
-                  <dd>
-                    <List items={spec.mustHaves} empty="Nothing required" />
-                  </dd>
-                </div>
-                <div className="bg-panel p-3">
-                  <dt className="type-eyebrow mb-2 text-muted">Nice to have</dt>
-                  <dd>
-                    <List items={spec.niceToHaves} empty="None" />
-                  </dd>
-                </div>
-                <div className="bg-panel p-3">
-                  <dt className="type-eyebrow mb-2 text-muted">Your limits</dt>
-                  <dd className="space-y-1 text-[0.95rem] text-ink-2">
-                    <p>
-                      <Mono className="text-ink">{dollars(order.per_order_cap_cents)}</Mono> per purchase
-                    </p>
-                    <p>
-                      <Mono className="text-ink">{dollars(order.monthly_cap_cents)}</Mono> per month
-                    </p>
-                  </dd>
-                </div>
-                <div className="bg-panel p-3">
-                  <dt className="type-eyebrow mb-2 text-muted">Trusted merchants</dt>
-                  <dd>
-                    <List items={order.merchant_allowlist} empty="None, so every purchase asks you first" />
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          ) : (
-            <p className="text-muted">Not parsed yet.</p>
-          )}
-        </Panel>
-
-        <Panel title="Current candidate" index="02" tag="Search" aside="via Channel3">
-          {candidate ? (
-            <div>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-                <h3 className="min-w-0 type-heading">
-                  {candidate.url ? (
-                    <a
-                      href={candidate.url}
-                      className="underline decoration-border-strong underline-offset-4 transition-colors hover:text-accent hover:decoration-accent"
-                    >
-                      {candidate.title}
-                    </a>
-                  ) : (
-                    candidate.title
-                  )}
-                </h3>
-                <Mono className="text-xl font-semibold text-accent">{dollars(candidate.price_cents)}</Mono>
+      <section className="mb-14">
+        <SectionTitle>What the agent understood</SectionTitle>
+        {spec ? (
+          <div className="space-y-8">
+            <blockquote className="border-l-2 border-accent pl-5 type-heading">
+              {spec.restatement}
+            </blockquote>
+            <dl className="grid gap-x-10 gap-y-8 sm:grid-cols-2">
+              <div>
+                <dt className="mb-2 text-sm font-medium">Category</dt>
+                <dd className="text-[0.95rem]">{spec.category}</dd>
               </div>
-              <p className="mt-3 font-mono text-xs text-muted">
-                {candidate.merchant} · fit <Mono className="text-ink">{candidate.fit_score}</Mono>/100 · seen{" "}
-                <LocalTime iso={candidate.seen_at} mode="both" />
-              </p>
-              <p className="mt-4 max-w-prose text-[0.95rem] leading-relaxed text-ink-2">{candidate.fit_reasoning}</p>
-              {candidate.must_haves && candidate.must_haves.length > 0 && (
-                <ul className="mt-4 space-y-1 border-t border-border pt-4 font-mono text-xs">
-                  {candidate.must_haves.map((m) => (
-                    <li key={m.requirement} className={m.pass ? "text-ink-2" : "text-refuse"}>
-                      <span aria-label={m.pass ? "met" : "not met"} className={m.pass ? "text-buy" : "text-refuse"}>
-                        {m.pass ? "✓" : "✗"}
-                      </span>{" "}
-                      {m.requirement}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <div>
+                <dt className="mb-2 text-sm font-medium">Max price</dt>
+                <dd>
+                  <Mono>{dollars(order.max_price_cents ?? spec.maxPriceCents)}</Mono>
+                </dd>
+              </div>
+              <div>
+                <dt className="mb-2 text-sm font-medium">Must have</dt>
+                <dd>
+                  <List items={spec.mustHaves} empty="Nothing required" />
+                </dd>
+              </div>
+              <div>
+                <dt className="mb-2 text-sm font-medium">Nice to have</dt>
+                <dd>
+                  <List items={spec.niceToHaves} empty="None" />
+                </dd>
+              </div>
+              <div>
+                <dt className="mb-2 text-sm font-medium">Your limits</dt>
+                <dd className="space-y-1 text-[0.95rem]">
+                  <p>
+                    <Mono>{dollars(order.per_order_cap_cents)}</Mono> per purchase
+                  </p>
+                  <p>
+                    <Mono>{dollars(order.monthly_cap_cents)}</Mono> per month
+                  </p>
+                </dd>
+              </div>
+              <div>
+                <dt className="mb-2 text-sm font-medium">Trusted merchants</dt>
+                <dd>
+                  <List items={order.merchant_allowlist} empty="None, so every purchase asks you first" />
+                </dd>
+              </div>
+            </dl>
+          </div>
+        ) : (
+          <p className="text-muted">Not parsed yet.</p>
+        )}
+      </section>
+
+      <section className="mb-14">
+        <SectionTitle>Current candidate</SectionTitle>
+        {candidate ? (
+          <div>
+            <p className="mb-2 type-eyebrow text-faint">via Channel3</p>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+              <h3 className="type-heading">
+                {candidate.url ? (
+                  <a href={candidate.url} className="underline decoration-rule-strong underline-offset-4 hover:decoration-accent">
+                    {candidate.title}
+                  </a>
+                ) : (
+                  candidate.title
+                )}
+              </h3>
+              <Mono className="text-lg">{dollars(candidate.price_cents)}</Mono>
             </div>
-          ) : (
-            <p className="text-muted">No candidate yet. One appears after the first check.</p>
-          )}
-        </Panel>
-      </div>
+            <p className="mt-2 text-sm text-muted">
+              {candidate.merchant} · fit <Mono>{candidate.fit_score}</Mono>/100 · seen{" "}
+              <LocalTime iso={candidate.seen_at} mode="both" />
+            </p>
+            <p className="mt-3 max-w-prose text-[0.95rem] leading-relaxed">{candidate.fit_reasoning}</p>
+            {candidate.must_haves && candidate.must_haves.length > 0 && (
+              <ul className="mt-3 space-y-1 text-sm">
+                {candidate.must_haves.map((m) => (
+                  <li key={m.requirement} className={m.pass ? "text-ink-2" : "text-neg"}>
+                    <span aria-label={m.pass ? "met" : "not met"}>{m.pass ? "✓" : "✗"}</span> {m.requirement}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <p className="text-muted">No candidate yet. One appears after the first check.</p>
+        )}
+      </section>
 
       {detail.considered.length > 1 && (
-        <Panel
-          title={`Considered ${detail.considered.length} products via Channel3`}
-          index="02"
-          tag="Search"
-          bodyClassName=""
-        >
-          <p className="border-b border-border px-4 py-2.5 font-mono text-xs text-muted sm:px-5">
-            The top {detail.considered.length} by fit score from the latest check.
-          </p>
+        <section className="mb-14">
+          <SectionTitle>Considered {detail.considered.length} products via Channel3</SectionTitle>
+          <p className="-mt-2 mb-4 text-sm text-muted">The top {detail.considered.length} by fit score from the latest check.</p>
           <ul>
             {detail.considered.map((c) => (
               <li
                 key={c.channel3_product_id}
-                className={`grid grid-cols-[1fr_auto] items-baseline gap-x-6 gap-y-1 border-t border-border px-4 py-2.5 text-sm first:border-t-0 sm:grid-cols-[1fr_auto_6rem_5.5rem] sm:px-5 ${
-                  c.chosen ? "bg-accent/5" : ""
-                }`}
+                className="grid grid-cols-[1fr_auto] items-baseline gap-x-6 gap-y-1 border-t border-rule py-3 text-sm sm:grid-cols-[1fr_auto_5.5rem_5.5rem]"
               >
                 <span className="min-w-0">
-                  <span className={`block truncate text-[0.95rem] ${c.chosen ? "font-medium text-ink" : "text-ink-2"}`}>
+                  <span className={`block truncate text-[0.95rem] ${c.chosen ? "font-medium" : ""}`}>
                     {c.url ? (
-                      <a href={c.url} className="transition-colors hover:text-accent hover:underline">
+                      <a href={c.url} className="hover:underline">
                         {c.title}
                       </a>
                     ) : (
                       c.title
                     )}
                   </span>
-                  <span className="font-mono text-xs text-muted">{c.merchant}</span>
+                  <span className="text-muted">{c.merchant}</span>
                 </span>
                 <span className="justify-self-end sm:order-last">{c.chosen && <Pill tone="blue">Chosen</Pill>}</span>
                 <span className="text-right sm:text-left">
-                  <Mono className={c.chosen ? "text-accent" : "text-ink"}>{dollars(c.price_cents)}</Mono>
+                  <Mono>{dollars(c.price_cents)}</Mono>
                 </span>
-                <span className="font-mono text-xs text-muted">
-                  fit <Mono className="text-ink-2">{c.fit_score}</Mono>
+                <span className="text-muted">
+                  fit <Mono>{c.fit_score}</Mono>
                 </span>
               </li>
             ))}
           </ul>
-        </Panel>
+        </section>
       )}
 
-      <Panel id="price-history" className="scroll-mt-6" title="Price history" index="03" tag="Decide">
-        <PriceChart
-          points={history}
-          maxPriceCents={order.max_price_cents ?? spec?.maxPriceCents ?? null}
-          spike={
-            refusal?.fakeSale.inflatedPeakCents != null
-              ? { priceCents: refusal.fakeSale.inflatedPeakCents, at: refusal.fakeSale.inflatedAt }
-              : null
-          }
-        />
-      </Panel>
+      <section id="price-history" className="mb-14 scroll-mt-6">
+        <SectionTitle>Price history</SectionTitle>
+        <PriceChart points={history} maxPriceCents={order.max_price_cents ?? spec?.maxPriceCents ?? null} />
+      </section>
 
-      <Panel
-        title="Decision log"
-        index="03–04"
-        tag="Decide + guardrails"
-        bodyClassName={decisions.length === 0 ? "px-4 py-5 sm:px-5" : ""}
-      >
+      <section>
+        <SectionTitle>Decision log</SectionTitle>
         {decisions.length === 0 ? (
           <p className="text-muted">No checks yet. Use “Check now”, or wait for the next watch cycle.</p>
         ) : (
@@ -490,7 +451,7 @@ async function OrderBody({ params }: { params: PageProps<"/orders/[id]">["params
             ))}
           </ol>
         )}
-      </Panel>
-    </div>
+      </section>
+    </>
   );
 }

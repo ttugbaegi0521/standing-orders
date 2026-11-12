@@ -50,7 +50,7 @@ async function productTitle(v: ApprovalView): Promise<string | null> {
 export default function ApprovalPage({ params, searchParams }: PageProps<"/approvals/[token]">) {
   return (
     <Shell>
-      <Suspense fallback={<p className="font-mono text-sm text-muted">Loading…</p>}>
+      <Suspense fallback={<p className="font-serif text-xl text-faint">Loading…</p>}>
         <ApprovalBody params={params} searchParams={searchParams} />
       </Suspense>
     </Shell>
@@ -89,25 +89,22 @@ async function ApprovalBody({
   if (captured) {
     body = (
       <>
-        <p className="type-eyebrow flex items-center gap-2 text-buy">
-          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-buy" />
-          Purchase confirmed
-        </p>
+        <p className="type-eyebrow text-muted">Purchase confirmed</p>
         <h1 className="mt-3 type-title">
           {title ?? view.raw_intent}
         </h1>
-        <dl className="mt-8 grid grid-cols-[auto_1fr] items-center gap-x-8 gap-y-3 border border-t-2 border-border border-t-buy bg-panel px-4 py-4 text-[0.95rem] sm:px-5">
-          <dt className="type-eyebrow text-muted">Amount</dt>
+        <dl className="mt-10 grid max-w-md grid-cols-[auto_1fr] gap-x-8 gap-y-4 text-[0.95rem]">
+          <dt className="text-muted">Amount</dt>
           <dd>
-            <Mono className="text-lg font-semibold text-buy">{dollars(view.amount_cents)}</Mono>
+            <Mono>{dollars(view.amount_cents)}</Mono>
           </dd>
-          <dt className="type-eyebrow text-muted">Merchant</dt>
-          <dd className="text-ink-2">{view.merchant}</dd>
-          <dt className="type-eyebrow text-muted">Capture</dt>
-          <dd className="min-w-0">
-            <Mono className="break-all text-ink-2">{view.capture_id ?? "—"}</Mono>
+          <dt className="text-muted">Merchant</dt>
+          <dd>{view.merchant}</dd>
+          <dt className="text-muted">Capture</dt>
+          <dd>
+            <Mono>{view.capture_id ?? "—"}</Mono>
           </dd>
-          <dt className="type-eyebrow text-muted">Order</dt>
+          <dt className="text-muted">Order</dt>
           <dd>
             <OrderStatusPill status={view.order_status} />
           </dd>

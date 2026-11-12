@@ -43,11 +43,7 @@ export function OrderActions({ orderId, status }: { orderId: string; status: str
           <button type="button" className={buttonQuiet} disabled={busy !== null} onClick={() => run("cancel")}>
             {busy === "cancel" ? "Cancelling…" : "Yes, cancel this order"}
           </button>
-          <button
-            type="button"
-            className="font-mono text-xs uppercase tracking-[0.08em] text-muted hover:text-accent"
-            onClick={() => setConfirmCancel(false)}
-          >
+          <button type="button" className="text-sm text-muted" onClick={() => setConfirmCancel(false)}>
             Keep it
           </button>
         </>

@@ -72,9 +72,9 @@ export function NewOrderForm() {
 
   if (created?.spec) {
     return (
-      <div className="max-w-xl border border-t-2 border-border border-t-accent bg-panel px-4 py-5 sm:px-6">
-        <p className="type-eyebrow text-accent">Here is what I understood</p>
-        <blockquote className="mt-4 border-l-2 border-accent pl-5 text-xl font-medium leading-snug tracking-tight sm:text-2xl">
+      <div className="max-w-xl">
+        <p className="type-eyebrow text-muted">Here is what I understood</p>
+        <blockquote className="mt-4 border-l-2 border-accent pl-5 font-serif text-2xl leading-snug">
           {created.spec.restatement}
         </blockquote>
         <p className="mt-5 text-sm text-muted">
@@ -110,9 +110,9 @@ export function NewOrderForm() {
   }
 
   return (
-    <form onSubmit={submit} className="max-w-xl space-y-7 border border-border bg-panel px-4 py-6 sm:px-6" noValidate>
+    <form onSubmit={submit} className="max-w-xl space-y-8" noValidate>
       <div>
-        <label htmlFor="intent" className="block type-heading">
+        <label htmlFor="intent" className="block font-serif text-xl">
           What do you want, and your max price?
         </label>
         <textarea
@@ -128,11 +128,11 @@ export function NewOrderForm() {
 
       <div className="grid gap-6 sm:grid-cols-2">
         <div>
-          <label htmlFor="perOrder" className="type-eyebrow block text-muted">
+          <label htmlFor="perOrder" className="block text-sm font-medium">
             Most to spend on one purchase
           </label>
           <div className="relative mt-2">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-muted">$</span>
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-faint">$</span>
             <input
               id="perOrder"
               inputMode="decimal"
@@ -144,11 +144,11 @@ export function NewOrderForm() {
           </div>
         </div>
         <div>
-          <label htmlFor="monthly" className="type-eyebrow block text-muted">
+          <label htmlFor="monthly" className="block text-sm font-medium">
             Most to spend per month
           </label>
           <div className="relative mt-2">
-            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-muted">$</span>
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-faint">$</span>
             <input
               id="monthly"
               inputMode="decimal"
@@ -162,8 +162,8 @@ export function NewOrderForm() {
       </div>
 
       <div>
-        <label htmlFor="merchants" className="type-eyebrow block text-muted">
-          Merchants you trust <span className="normal-case tracking-normal text-muted">(optional, comma-separated)</span>
+        <label htmlFor="merchants" className="block text-sm font-medium">
+          Merchants you trust <span className="font-normal text-faint">(optional, comma-separated)</span>
         </label>
         <input
           id="merchants"
@@ -177,11 +177,11 @@ export function NewOrderForm() {
 
       {error && <Notice tone="red">{error}</Notice>}
 
-      <div className="flex items-center gap-4 border-t border-border pt-6">
+      <div className="flex items-center gap-4">
         <button type="submit" disabled={busy} className={buttonPrimary}>
           {busy ? "Reading your request…" : "Create standing order"}
         </button>
-        <Link href="/orders" className="font-mono text-xs uppercase tracking-[0.1em] text-muted hover:text-accent">
+        <Link href="/orders" className="text-sm text-muted hover:text-ink">
           Cancel
         </Link>
       </div>

@@ -16,68 +16,48 @@ const STACK = [
 
 export default function Home() {
   return (
-    <Shell width="max-w-5xl">
-      <section className="border border-border bg-panel">
-        <div className="border-b border-border px-4 py-2.5 sm:px-8">
-          <p className="type-eyebrow flex items-center gap-2 text-ink-2">
-            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
-            Standing Orders
-          </p>
-        </div>
-        <div className="px-4 py-10 sm:px-8 sm:py-14">
-          <p aria-hidden className="mb-4 font-mono text-sm text-accent">
-            &gt;_
-          </p>
-          <h1 className="max-w-3xl type-display">
-            Limit orders for shopping.
-            <span
-              aria-hidden
-              className="cursor-blink ml-2 inline-block h-[0.8em] w-[0.42em] translate-y-[0.06em] bg-accent align-baseline"
-            />
-          </h1>
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-2">
-            Tell an agent what you want and your price. It watches the market, buys with PayPal when a real deal
-            qualifies, and refuses the fake ones.
-          </p>
-          <div className="mt-9 flex flex-wrap items-center gap-3">
-            <Link href="/orders" className={`${buttonPrimary} px-6 py-3`}>
-              Go to your orders →
-            </Link>
-            <Link href="/store" className={`${buttonQuiet} px-6 py-3`}>
-              Visit the sandbox store
-            </Link>
-          </div>
-        </div>
-
-        <div className="border-t border-border bg-bg/40 px-4 py-4 sm:px-8">
-          <h2 className="type-eyebrow text-muted">How it’s built</h2>
-          <dl className="mt-3 flex flex-col gap-y-2 font-mono text-[0.8125rem] lg:flex-row lg:flex-wrap lg:items-baseline">
-            {STACK.map(([name, role], i) => (
-              <div key={name} className="flex items-baseline gap-2">
-                <dt className="font-semibold uppercase tracking-[0.1em] text-accent">{name}</dt>
-                <dd className="text-ink-2">{role}</dd>
-                {i < STACK.length - 1 && (
-                  <span aria-hidden className="hidden px-3 text-faint lg:inline">
-                    ·
-                  </span>
-                )}
-              </div>
-            ))}
-          </dl>
+    <Shell>
+      <section className="pt-6 sm:pt-12">
+        <h1 className="max-w-2xl type-display">
+          Limit orders for shopping.
+        </h1>
+        <p className="mt-5 max-w-xl text-lg leading-relaxed text-ink-2">
+          Tell an agent what you want and your price. It watches the market, buys with PayPal when a real deal
+          qualifies, and refuses the fake ones.
+        </p>
+        <div className="mt-9 flex flex-wrap items-center gap-3">
+          <Link href="/orders" className={`${buttonPrimary} px-7 py-3 text-base`}>
+            Go to your orders →
+          </Link>
+          <Link href="/store" className={`${buttonQuiet} px-7 py-3 text-base`}>
+            Visit the sandbox store
+          </Link>
         </div>
       </section>
 
-      <ol className="mt-4 grid gap-px border border-border bg-border sm:grid-cols-3">
+      <ol className="mt-20 grid gap-10 border-t border-rule pt-10 sm:grid-cols-3">
         {STEPS.map(([title, body], i) => (
-          <li key={title} className="bg-panel px-4 py-5 sm:px-5">
-            <span className="font-mono text-xs tabular-nums text-accent">{String(i + 1).padStart(2, "0")}</span>
-            <h2 className="mt-3 font-mono text-sm font-semibold uppercase tracking-[0.08em] text-ink">{title}</h2>
+          <li key={title}>
+            <span className="font-mono text-sm text-accent">{String(i + 1).padStart(2, "0")}</span>
+            <h2 className="mt-2 font-serif text-xl">{title}</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted">{body}</p>
           </li>
         ))}
       </ol>
 
-      <p className="mt-4 border border-l-2 border-border border-l-hold bg-panel px-4 py-3 text-sm leading-relaxed text-ink-2 sm:px-5">
+      <section className="mt-16 border-t border-rule pt-10">
+        <h2 className="type-eyebrow text-muted">How it’s built</h2>
+        <dl className="mt-5 grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
+          {STACK.map(([name, role]) => (
+            <div key={name}>
+              <dt className="type-heading">{name}</dt>
+              <dd className="mt-1 text-sm leading-relaxed text-muted">{role}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <p className="mt-16 max-w-xl text-sm leading-relaxed text-muted">
         You set the limits: a cap per order, a monthly cap, the merchants you trust. Anything outside them comes
         back to you instead of being bought.
       </p>

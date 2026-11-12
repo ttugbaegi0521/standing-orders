@@ -29,37 +29,34 @@ export default function StorePage() {
 
   return (
     <Shell width="max-w-4xl">
-      <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-3 border-b border-border pb-6">
+      <div className="flex flex-col gap-10">
+      <header className="flex flex-col gap-2">
         <h1 className="type-title">Sandbox Store</h1>
-        <p className="max-w-2xl text-ink-2">
+        <p className="text-muted">
           An agent-ready merchant on the PayPal sandbox. Pay with a sandbox personal account; no real money moves.
         </p>
       </header>
 
       {error && (
-        <p role="alert" className="border border-l-2 border-border border-l-refuse bg-panel px-4 py-3 text-sm text-refuse">
+        <p role="alert" className="rounded-sm border border-l-[3px] border-neg-line border-l-neg bg-neg-wash px-4 py-3 text-sm text-neg">
           {error}
         </p>
       )}
 
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {STORE_PRODUCTS.map((p) => (
-          <li key={p.id} className="flex flex-col border border-border bg-panel">
-            <div className="border-b border-border bg-bg p-3">
-              <Image src={p.image} alt={p.title} width={320} height={200} unoptimized className="h-auto w-full" />
-            </div>
+          <li key={p.id} className="flex flex-col overflow-hidden rounded-sm border border-rule bg-surface">
+            <Image src={p.image} alt={p.title} width={320} height={200} unoptimized className="h-auto w-full" />
             <div className="flex flex-1 flex-col gap-3 p-4">
-              <p className="type-eyebrow text-muted">{p.id}</p>
               <h2 className="type-heading">{p.title}</h2>
-              <p className="flex-1 text-sm leading-relaxed text-muted">{p.description}</p>
-              <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
-                <span className="font-mono text-lg font-semibold tabular-nums text-ink">{formatPrice(p.price_cents)}</span>
+              <p className="flex-1 text-sm text-muted">{p.description}</p>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-mono text-lg tabular-nums">{formatPrice(p.price_cents)}</span>
                 <button
                   type="button"
                   onClick={() => buy(p.id)}
                   disabled={pending !== null}
-                  className="rounded-[4px] bg-paypal px-4 py-2 text-sm font-semibold text-bg transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
+                  className="rounded-md bg-paypal px-4 py-2 text-sm font-semibold text-ink transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   {pending === p.id ? "Redirecting…" : "Buy with PayPal"}
                 </button>

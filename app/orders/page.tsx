@@ -59,11 +59,7 @@ async function KillSwitchBanner() {
   await connection();
   if (!(await killSwitchState())) return null;
   return (
-    <div
-      role="alert"
-      className="mb-6 flex items-center gap-3 border border-t-2 border-refuse/40 border-t-refuse bg-refuse/10 px-4 py-3 font-mono text-sm font-semibold uppercase tracking-[0.06em] text-refuse sm:px-5"
-    >
-      <span aria-hidden className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-refuse motion-reduce:animate-none" />
+    <div role="alert" className="mb-8 rounded-sm bg-neg px-5 py-4 text-base font-medium text-paper">
       Agent paused — kill switch on. No purchases will be made.
     </div>
   );
@@ -78,11 +74,11 @@ async function KillSwitchControl() {
 // The heading and buttons are static; the kill switch and the list are read from the database per request.
 export default function OrdersPage() {
   return (
-    <Shell width="max-w-5xl">
+    <Shell width="max-w-4xl">
       <Suspense fallback={null}>
         <KillSwitchBanner />
       </Suspense>
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b border-border pb-6">
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <h1 className="type-title">Your standing orders</h1>
         <div className="flex flex-wrap items-center gap-3">
           <Suspense fallback={null}>
@@ -93,7 +89,7 @@ export default function OrdersPage() {
           </Link>
         </div>
       </div>
-      <Suspense fallback={<p className="mt-8 font-mono text-sm text-muted">Loading your orders…</p>}>
+      <Suspense fallback={<p className="mt-10 text-faint">Loading your orders…</p>}>
         <OrdersList />
       </Suspense>
     </Shell>
@@ -114,10 +110,8 @@ async function OrdersList() {
       )}
 
       {!problem && orders.length === 0 && (
-        <div className="mt-8 max-w-lg border border-border bg-panel px-5 py-6">
-          <p className="font-mono text-base font-semibold uppercase tracking-[0.06em] text-ink">
-            Nothing is being watched yet.
-          </p>
+        <div className="mt-16 max-w-md">
+          <p className="font-serif text-2xl">Nothing is being watched yet.</p>
           <p className="mt-3 text-muted">
             Describe something you want to buy and the most you will pay. The agent takes it from there.
           </p>
@@ -128,49 +122,45 @@ async function OrdersList() {
       )}
 
       {orders.length > 0 && (
-        <div className="mt-6">
-          <p className="mb-3 font-mono text-xs uppercase tracking-[0.1em] text-muted">{counts(orders)}</p>
-          <div className="border border-border bg-panel">
-            <div className="hidden grid-cols-[1fr_6.5rem_8.5rem_8rem] gap-x-6 border-b border-border px-5 py-2.5 type-eyebrow text-muted sm:grid">
-              <span>Order</span>
-              <span>Max price</span>
-              <span>Status</span>
-              <span>Last decision</span>
-            </div>
-            <ul>
-              {orders.map((o) => {
-                const muted = MUTED.has(o.status);
-                return (
-                  <li key={o.id} className="border-t border-border first:border-t-0">
-                    <Link
-                      href={`/orders/${o.id}`}
-                      className={`grid items-center gap-x-6 gap-y-3 px-4 py-4 transition-colors hover:bg-panel-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent sm:grid-cols-[1fr_6.5rem_8.5rem_8rem] sm:px-5 ${
-                        muted ? "text-muted" : ""
-                      }`}
-                    >
-                      <span>
-                        <span className={`line-clamp-2 text-[1.0625rem] font-medium leading-snug ${muted ? "" : "text-ink"}`}>
-                          {o.raw_intent}
-                        </span>
-                        <span className="mt-1 block font-mono text-[0.6875rem] text-muted">
-                          Created <LocalTime iso={o.created_at} mode="relative" />
-                        </span>
-                      </span>
-                      <span>
-                        <Mono className={muted ? "" : "text-ink"}>{dollars(o.max_price_cents)}</Mono>
-                      </span>
-                      <span>
-                        <OrderStatusPill status={o.status} />
-                      </span>
-                      <span>
-                        <ActionPill action={o.latest_action} />
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+        <div className="mt-8">
+          <p className="mb-6 text-sm text-muted">{counts(orders)}</p>
+          <div className="hidden grid-cols-[1fr_6.5rem_7.5rem_7.5rem] gap-x-6 border-b border-rule pb-2 type-eyebrow text-muted sm:grid">
+            <span>Order</span>
+            <span>Max price</span>
+            <span>Status</span>
+            <span>Last decision</span>
           </div>
+          <ul>
+            {orders.map((o) => {
+              const muted = MUTED.has(o.status);
+              return (
+                <li key={o.id} className="border-b border-rule">
+                  <Link
+                    href={`/orders/${o.id}`}
+                    className={`grid items-center gap-x-6 gap-y-3 py-5 sm:grid-cols-[1fr_6.5rem_7.5rem_7.5rem] ${
+                      muted ? "text-faint" : "transition-colors hover:bg-sunk"
+                    }`}
+                  >
+                    <span>
+                      <span className="line-clamp-2 font-serif text-lg leading-snug">{o.raw_intent}</span>
+                      <span className="mt-1 block text-xs text-faint">
+                        Created <LocalTime iso={o.created_at} mode="relative" />
+                      </span>
+                    </span>
+                    <span>
+                      <Mono>{dollars(o.max_price_cents)}</Mono>
+                    </span>
+                    <span>
+                      <OrderStatusPill status={o.status} />
+                    </span>
+                    <span>
+                      <ActionPill action={o.latest_action} />
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
     </>
